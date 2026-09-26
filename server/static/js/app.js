@@ -617,7 +617,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Hardware Lease Toggle (Claim / Release / Take Control) ---
   let isLeaseToggling = false;
-  const btnToggleLease = document.getElementById('btn-toggle-lease');
   btnToggleLease.addEventListener('click', async () => {
     if (isLeaseToggling) return;
     isLeaseToggling = true;
