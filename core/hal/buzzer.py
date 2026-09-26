@@ -19,7 +19,7 @@ class Buzzer(BaseHardwareDevice):
         self.pin = pin
         self.state = False
         self._gpio = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def initialize(self) -> bool:
         with self._lock:

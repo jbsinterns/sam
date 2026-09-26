@@ -5,6 +5,7 @@ generates a simulated telemetry HUD test card without crashing the server.
 """
 
 import time
+import platform
 import threading
 from typing import Dict, Any, Optional
 
@@ -16,6 +17,21 @@ except ImportError:
     cv2 = None
     np = None
     HAS_CV2 = False
+
+
+def _open_capture(idx: int) -> Optional[Any]:
+    """Opens platform-optimized video capture (CAP_V4L2 for Linux Pi, CAP_DSHOW for Windows)."""
+    if not HAS_CV2 or cv2 is None:
+        return None
+    try:
+        sys_name = platform.system()
+        if sys_name == "Windows":
+            return cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+        elif sys_name == "Linux":
+            return cv2.VideoCapture(idx, cv2.CAP_V4L2)
+    except Exception:
+        pass
+    return cv2.VideoCapture(idx)
 
 FALLBACK_EMPTY_JPEG = (
     b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xdb\x00C\x00\x08\x06"
@@ -68,12 +84,15 @@ class CameraManager:
     def stop(self) -> None:
         """Stops capture thread and releases camera cleanly."""
         with self._lifecycle_lock:
-            if not self.is_running and self.cap is None:
+            if not self.is_running:
+                self._release_camera()
                 return
             self.is_running = False
-            if self._thread and self._thread.is_alive():
-                self._thread.join(timeout=1.5)
+            t = self._thread
+            if t and t.is_alive():
+                t.join(timeout=0.6)
             self._release_camera()
+            self._thread = None
 
     def _auto_detect_camera(self) -> Optional[int]:
         """
@@ -84,14 +103,15 @@ class CameraManager:
         candidates = [self.preferred_index] + [i for i in range(4) if i != self.preferred_index]
         for idx in candidates:
             try:
-                cap = cv2.VideoCapture(idx)
-                if cap.isOpened():
+                cap = _open_capture(idx)
+                if cap and cap.isOpened():
                     ret, _ = cap.read()
                     if ret:
                         cap.release()
                         print(f"[Camera] Successfully auto-detected camera at index {idx}")
                         return idx
-                cap.release()
+                if cap:
+                    cap.release()
             except Exception:
                 continue
         return None
@@ -117,7 +137,11 @@ class CameraManager:
             return False
 
         try:
-            self.cap = cv2.VideoCapture(cam_idx)
+            self.cap = _open_capture(cam_idx)
+            if self.cap is None or not self.cap.isOpened():
+                self.active_index = None
+                return False
+
             # Dynamically request 1280x720 HD widescreen
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
@@ -139,14 +163,14 @@ class CameraManager:
             return False
 
     def _release_camera(self) -> None:
-        if self.cap:
-            try:
-                self.cap.release()
-            except Exception:
-                pass
-            self.cap = None
-        self.active_index = None
-        time.sleep(0.15)
+        with self._lock:
+            if self.cap:
+                try:
+                    self.cap.release()
+                except Exception:
+                    pass
+                self.cap = None
+            self.active_index = None
 
     def _create_synthetic_raw(self) -> Any:
         """Generates synthetic raw BGR frame numpy array."""
@@ -202,43 +226,49 @@ class CameraManager:
         if self.cap is None:
             self._init_camera()
 
-        while self.is_running:
-            frame_bytes: Optional[bytes] = None
-            raw_frame: Optional[Any] = None
+        try:
+            while self.is_running:
+                frame_bytes: Optional[bytes] = None
+                raw_frame: Optional[Any] = None
 
-            # Attempt capture if camera is open
-            if self.cap and self.cap.isOpened():
-                ret, frame = self.cap.read()
-                if ret and frame is not None:
-                    consecutive_failures = 0
-                    raw_frame = frame
-                    _, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
-                    frame_bytes = jpeg.tobytes()
-                else:
-                    consecutive_failures += 1
-                    if consecutive_failures > 5:
-                        print("[Camera] Physical stream lost. Re-detecting...")
-                        self._release_camera()
+                # Attempt capture if camera is open
+                cap = self.cap
+                if cap and cap.isOpened():
+                    ret, frame = cap.read()
+                    if not self.is_running:
+                        break
+                    if ret and frame is not None:
+                        consecutive_failures = 0
+                        raw_frame = frame
+                        _, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
+                        frame_bytes = jpeg.tobytes()
+                    else:
+                        consecutive_failures += 1
+                        if consecutive_failures > 5:
+                            print("[Camera] Physical stream lost. Re-detecting...")
+                            self._release_camera()
 
-            # If no physical camera active, attempt to re-open every 1.5 seconds
-            if frame_bytes is None:
-                now = time.time()
-                if self.cap is None and (now - self._last_init_attempt > 1.5):
-                    self._last_init_attempt = now
-                    self._init_camera()
-                raw_frame = self._create_synthetic_raw()
-                if HAS_CV2 and cv2 is not None and raw_frame is not None:
-                    _, jpeg = cv2.imencode(".jpg", raw_frame, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
-                    frame_bytes = jpeg.tobytes()
-                else:
-                    frame_bytes = FALLBACK_EMPTY_JPEG
+                # If no physical camera active, attempt to re-open every 2.0 seconds
+                if frame_bytes is None:
+                    now = time.time()
+                    if self.cap is None and (now - self._last_init_attempt > 2.0):
+                        self._last_init_attempt = now
+                        self._init_camera()
+                    raw_frame = self._create_synthetic_raw()
+                    if HAS_CV2 and cv2 is not None and raw_frame is not None:
+                        _, jpeg = cv2.imencode(".jpg", raw_frame, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
+                        frame_bytes = jpeg.tobytes()
+                    else:
+                        frame_bytes = FALLBACK_EMPTY_JPEG
 
-            with self._lock:
-                self.last_frame_bytes = frame_bytes
-                self.last_raw_frame = raw_frame
-                self.last_frame_time = time.time()
+                with self._lock:
+                    self.last_frame_bytes = frame_bytes
+                    self.last_raw_frame = raw_frame
+                    self.last_frame_time = time.time()
 
-            time.sleep(1.0 / self.fps)
+                time.sleep(1.0 / self.fps)
+        finally:
+            self._release_camera()
 
     def get_latest_frame(self) -> bytes:
         """Returns the most recent JPEG frame safely."""

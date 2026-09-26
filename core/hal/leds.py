@@ -23,7 +23,7 @@ class LEDController(BaseHardwareDevice):
             "right": False,
         }
         self._gpio = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def initialize(self) -> bool:
         if self.is_initialized:

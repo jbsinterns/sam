@@ -4,6 +4,7 @@ Provides high-efficiency, zero-overhead MJPEG streaming for HTML5 and mobile tel
 """
 
 import time
+import asyncio
 from fastapi import APIRouter, Response
 from fastapi.responses import StreamingResponse
 from core.hardware_manager import hw_manager
@@ -11,8 +12,8 @@ from core.hardware_manager import hw_manager
 router = APIRouter(prefix="/api/video", tags=["Video"])
 
 
-def generate_frames():
-    """Generator yielding multipart JPEG frames for low-overhead browser streaming."""
+async def generate_frames():
+    """Asynchronous generator yielding multipart JPEG frames with zero thread-pool overhead."""
     fps = hw_manager.camera.fps or 25
     frame_interval = 1.0 / fps
 
@@ -28,18 +29,18 @@ def generate_frames():
 
             elapsed = time.time() - start_time
             sleep_time = max(0.005, frame_interval - elapsed)
-            time.sleep(sleep_time)
-    except (GeneratorExit, BrokenPipeError, ConnectionResetError):
+            await asyncio.sleep(sleep_time)
+    except (asyncio.CancelledError, GeneratorExit, BrokenPipeError, ConnectionResetError):
         pass
-    except Exception as e:
+    except Exception:
         pass
 
 
 @router.get("/feed")
-def video_feed():
+async def video_feed():
     """
-    Dedicated MJPEG streaming endpoint for HTML <img src='/api/video/feed'>.
-    Low latency, sharp resolution, and zero complex signaling.
+    Dedicated async MJPEG streaming endpoint for HTML <img src='/api/video/feed'>.
+    Low latency, native async socket polling on Linux (epoll) & Windows.
     """
     return StreamingResponse(
         generate_frames(),

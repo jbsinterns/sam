@@ -616,7 +616,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Hardware Lease Toggle (Claim / Release / Take Control) ---
-  document.getElementById('btn-toggle-lease').addEventListener('click', async () => {
+  let isLeaseToggling = false;
+  const btnToggleLease = document.getElementById('btn-toggle-lease');
+  btnToggleLease.addEventListener('click', async () => {
+    if (isLeaseToggling) return;
+    isLeaseToggling = true;
+    btnToggleLease.style.pointerEvents = 'none';
+
     const isClaimedByMe = isHardwareLeased && (
       !currentOperatorId ||
       currentOperatorId === clientId ||
@@ -637,6 +643,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       const data = await res.json();
       if (data && typeof data.hardware_leased === 'boolean') {
+        const wasLeased = isHardwareLeased;
         isHardwareLeased = data.hardware_leased;
         if (isHardwareLeased) {
           currentOperatorId = data.operator_id || clientId;
@@ -646,14 +653,23 @@ document.addEventListener('DOMContentLoaded', () => {
           activeOperatorName = null;
         }
         updateLeaseUI();
-      }
-      setTimeout(() => {
-        if (cameraStreamImg) {
-          reloadVideoStream();
+
+        // Only reload stream when acquiring physical camera, avoiding socket churn on release
+        if (!wasLeased && isHardwareLeased) {
+          setTimeout(() => {
+            if (cameraStreamImg) {
+              reloadVideoStream();
+            }
+          }, 350);
         }
-      }, 250);
+      }
     } catch (e) {
       console.error('Lease toggle failed:', e);
+    } finally {
+      setTimeout(() => {
+        isLeaseToggling = false;
+        btnToggleLease.style.pointerEvents = 'auto';
+      }, 300);
     }
   });
 
