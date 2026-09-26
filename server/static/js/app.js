@@ -93,6 +93,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- WebSocket Connection ---
   function connectWebSocket() {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/teleop`;
 

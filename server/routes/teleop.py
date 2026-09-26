@@ -6,6 +6,7 @@ and live ultrasonic sensor feedback.
 
 import asyncio
 import json
+from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from core.hardware_manager import hw_manager
 
@@ -38,12 +39,16 @@ async def websocket_teleop_endpoint(websocket: WebSocket):
 
     broadcast_task = asyncio.create_task(telemetry_broadcaster())
 
+    client_operator_id: Optional[str] = None
+
     try:
         while True:
             data = await websocket.receive_text()
             try:
                 msg = json.loads(data)
                 mtype = msg.get("type")
+                if "operator_id" in msg and msg["operator_id"]:
+                    client_operator_id = str(msg["operator_id"])
 
                 if mtype == "heartbeat":
                     hw_manager.heartbeat(operator_id=msg.get("operator_id"))
@@ -126,7 +131,21 @@ async def websocket_teleop_endpoint(websocket: WebSocket):
                 print(f"[Teleop WS] Error processing packet: {e}")
 
     except WebSocketDisconnect:
-        print("[Teleop WS] Client disconnected.")
+        pass
     finally:
         broadcast_task.cancel()
-        hw_manager.emergency_stop()
+        # Only stop drive if this disconnecting WebSocket was the active operator
+        is_active_driver = (
+            hw_manager.is_hardware_leased
+            and hw_manager.active_operator_id
+            and client_operator_id
+            and (
+                client_operator_id == hw_manager.active_operator_id
+                or client_operator_id in ("driver", "primary-operator")
+            )
+        )
+        if is_active_driver:
+            print(f"[Teleop WS] Active operator ({client_operator_id}) disconnected. Safe emergency stop triggered.")
+            hw_manager.emergency_stop()
+        else:
+            print(f"[Teleop WS] Disconnected client ({client_operator_id or 'observer'}). Active driver unaffected.")

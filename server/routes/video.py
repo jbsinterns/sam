@@ -16,18 +16,23 @@ def generate_frames():
     fps = hw_manager.camera.fps or 25
     frame_interval = 1.0 / fps
 
-    while True:
-        start_time = time.time()
-        frame = hw_manager.camera.get_latest_frame()
+    try:
+        while hw_manager._is_running:
+            start_time = time.time()
+            frame = hw_manager.camera.get_latest_frame()
 
-        yield (
-            b"--frame\r\n"
-            b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
-        )
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
+            )
 
-        elapsed = time.time() - start_time
-        sleep_time = max(0.005, frame_interval - elapsed)
-        time.sleep(sleep_time)
+            elapsed = time.time() - start_time
+            sleep_time = max(0.005, frame_interval - elapsed)
+            time.sleep(sleep_time)
+    except (GeneratorExit, BrokenPipeError, ConnectionResetError):
+        pass
+    except Exception as e:
+        pass
 
 
 @router.get("/feed")

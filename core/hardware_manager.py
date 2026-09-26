@@ -194,7 +194,8 @@ class HardwareManager:
                     }
                 elif front_dist < self.warning_stop_cm:
                     # Progressive proportional deceleration: scale speed between 20% and 100%
-                    ratio = (front_dist - self.critical_stop_cm) / max(1.0, (self.warning_stop_cm - self.critical_stop_cm))
+                    span = max(1.0, float(self.warning_stop_cm - self.critical_stop_cm))
+                    ratio = max(0.0, min(1.0, (front_dist - self.critical_stop_cm) / span))
                     speed_cap = max(20.0, ratio * 100.0)
                     if linear > speed_cap:
                         linear = speed_cap
@@ -223,7 +224,8 @@ class HardwareManager:
                         "angular": 0.0,
                     }
                 elif rear_dist < self.warning_stop_cm:
-                    ratio = (rear_dist - self.critical_stop_cm) / max(1.0, (self.warning_stop_cm - self.critical_stop_cm))
+                    span = max(1.0, float(self.warning_stop_cm - self.critical_stop_cm))
+                    ratio = max(0.0, min(1.0, (rear_dist - self.critical_stop_cm) / span))
                     speed_cap = max(20.0, ratio * 100.0)
                     if abs(linear) > speed_cap:
                         linear = -speed_cap

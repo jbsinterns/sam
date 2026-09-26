@@ -103,6 +103,14 @@ class TeleopControls {
         this._processKeyboardDrive();
       }
     });
+
+    // Failsafe: clear pressed keys and halt drive when browser loses focus (Alt-Tab, window change)
+    window.addEventListener('blur', () => {
+      if (this.activeKeys.size > 0) {
+        this.activeKeys.clear();
+        this.sendDrive(0.0, 0.0);
+      }
+    });
   }
 
   _processKeyboardDrive() {
@@ -138,6 +146,11 @@ class TeleopControls {
 
       const startDrive = (e) => {
         e.preventDefault();
+        try {
+          if (btn.setPointerCapture && e.pointerId !== undefined) {
+            btn.setPointerCapture(e.pointerId);
+          }
+        } catch (err) {}
         btn.classList.add('pressed');
         this.activeDpadDirection = dir;
 
@@ -154,6 +167,11 @@ class TeleopControls {
 
       const stopDrive = (e) => {
         e.preventDefault();
+        try {
+          if (btn.releasePointerCapture && e.pointerId !== undefined && btn.hasPointerCapture && btn.hasPointerCapture(e.pointerId)) {
+            btn.releasePointerCapture(e.pointerId);
+          }
+        } catch (err) {}
         btn.classList.remove('pressed');
         if (this.activeDpadDirection === dir) {
           this.activeDpadDirection = null;
@@ -165,7 +183,6 @@ class TeleopControls {
       btn.addEventListener('pointerdown', startDrive);
       btn.addEventListener('pointerup', stopDrive);
       btn.addEventListener('pointercancel', stopDrive);
-      btn.addEventListener('pointerleave', stopDrive);
     });
   }
 

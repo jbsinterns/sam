@@ -51,25 +51,29 @@ class CameraManager:
 
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
+        self._lifecycle_lock = threading.Lock()
         self._mock_counter = 0
 
     def start(self) -> None:
         """Starts background frame acquisition thread with immediate hardware re-initialization."""
-        if self.is_running:
-            return
-        self.is_running = True
-        self._last_init_attempt = time.time()
-        time.sleep(0.1)  # Allow OS driver to settle if recently released
-        self._init_camera()
-        self._thread = threading.Thread(target=self._capture_loop, daemon=True)
-        self._thread.start()
+        with self._lifecycle_lock:
+            if self.is_running:
+                return
+            self.is_running = True
+            self._last_init_attempt = time.time()
+            self._init_camera()
+            self._thread = threading.Thread(target=self._capture_loop, daemon=True)
+            self._thread.start()
 
     def stop(self) -> None:
-        """Stops capture thread and releases camera."""
-        self.is_running = False
-        if self._thread:
-            self._thread.join(timeout=1.5)
-        self._release_camera()
+        """Stops capture thread and releases camera cleanly."""
+        with self._lifecycle_lock:
+            if not self.is_running and self.cap is None:
+                return
+            self.is_running = False
+            if self._thread and self._thread.is_alive():
+                self._thread.join(timeout=1.5)
+            self._release_camera()
 
     def _auto_detect_camera(self) -> Optional[int]:
         """
