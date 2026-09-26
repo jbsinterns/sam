@@ -6,7 +6,7 @@
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>{{ rover_name }} Mobile Teleoperation Dashboard</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=2.5">
+  <link rel="stylesheet" href="/static/css/style.css?v=2.6">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -25,6 +25,12 @@
         id="lease-badge">
         {{ 'ACTIVE' if (initial_telemetry and initial_telemetry.hardware_leased) else 'STANDBY' }}
       </span>
+
+      <!-- Nav Latency / Ping Badge -->
+      <div class="nav-rtt-pill" id="nav-rtt-badge" title="WebSocket Ping Latency (Round Trip Time)">
+        <span class="nav-rtt-dot"></span>
+        <span class="nav-rtt-val" id="nav-rtt">-- ms</span>
+      </div>
 
       <!-- Power / Thermal Warning Pill (Surfaced proactively before brownout) -->
       <div class="vitals-alert-pill" id="vitals-alert-pill" style="display: none;" title="Raspberry Pi Power/Thermal Warning">
@@ -597,9 +603,9 @@
   </script>
 
   <!-- Scripts -->
-  <script src="/static/js/joystick.js?v=2.9"></script>
-  <script src="/static/js/controls.js?v=2.9"></script>
-  <script src="/static/js/app.js?v=2.9"></script>
+  <script src="/static/js/joystick.js?v=3.0"></script>
+  <script src="/static/js/controls.js?v=3.0"></script>
+  <script src="/static/js/app.js?v=3.0"></script>
 </body>
 
 </html>

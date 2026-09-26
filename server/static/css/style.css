@@ -148,6 +148,63 @@ body {
   border-color: rgba(16, 185, 129, 0.4);
 }
 
+.nav-rtt-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.9);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.nav-rtt-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  display: inline-block;
+}
+
+.nav-rtt-pill.rtt-green {
+  color: var(--accent-green);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.nav-rtt-pill.rtt-green .nav-rtt-dot {
+  background: var(--accent-green);
+}
+
+.nav-rtt-pill.rtt-cyan {
+  color: var(--accent-cyan);
+  border-color: rgba(6, 182, 212, 0.4);
+}
+.nav-rtt-pill.rtt-cyan .nav-rtt-dot {
+  background: var(--accent-cyan);
+}
+
+.nav-rtt-pill.rtt-amber {
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+.nav-rtt-pill.rtt-amber .nav-rtt-dot {
+  background: #fbbf24;
+}
+
+.nav-rtt-pill.rtt-red {
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.5);
+}
+.nav-rtt-pill.rtt-red .nav-rtt-dot {
+  background: #f87171;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -1693,5 +1750,42 @@ button:focus-visible,
     background: rgba(245, 158, 11, 0.25);
     border-color: var(--accent-amber);
     box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+  }
+}
+
+/* Responsive Single-Row Top Navigation */
+@media (max-width: 520px) {
+  #btn-open-wifi {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  #btn-snapshot {
+    display: none;
+  }
+  .rover-title {
+    font-size: 0.95rem;
+  }
+  .top-nav {
+    padding: 6px 8px;
+    gap: 4px;
+  }
+  .header-actions {
+    gap: 3px;
+  }
+  .btn-lease {
+    padding: 5px 8px;
+    font-size: 0.72rem;
+  }
+}
+
+@media (max-width: 350px) {
+  #lease-badge {
+    display: none;
+  }
+  .nav-rtt-pill {
+    padding: 2px 4px;
+    font-size: 0.58rem;
   }
 }

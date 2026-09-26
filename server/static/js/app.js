@@ -59,6 +59,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const telemRate = document.getElementById('telem-rate');
   const telemPackets = document.getElementById('telem-packets');
   const telemLeaseStatus = document.getElementById('telem-lease-status');
+  const navRtt = document.getElementById('nav-rtt');
+  const navRttBadge = document.getElementById('nav-rtt-badge');
 
   let txPackets = 0;
   let rxPackets = 0;
@@ -155,13 +157,25 @@ document.addEventListener('DOMContentLoaded', () => {
           handleTelemetry(msg.data);
         } else if (msg.type === 'pong') {
           const rtt = Math.round(performance.now() - msg.t);
+          const colorClass = (
+            rtt < 40 ? 'val-green' :
+            rtt < 100 ? 'val-cyan' :
+            rtt < 200 ? 'val-amber' : 'val-red'
+          );
           if (telemRtt) {
             telemRtt.textContent = `${rtt} ms`;
-            telemRtt.className = 'telem-val ' + (
-              rtt < 40 ? 'val-green' :
-              rtt < 100 ? 'val-cyan' :
-              rtt < 200 ? 'val-amber' : 'val-red'
-            );
+            telemRtt.className = `telem-val ${colorClass}`;
+          }
+          if (navRtt) {
+            navRtt.textContent = `${rtt} ms`;
+            if (navRttBadge) {
+              const badgeClass = (
+                rtt < 40 ? 'rtt-green' :
+                rtt < 100 ? 'rtt-cyan' :
+                rtt < 200 ? 'rtt-amber' : 'rtt-red'
+              );
+              navRttBadge.className = `nav-rtt-pill ${badgeClass}`;
+            }
           }
         } else if (msg.type === 'warning') {
           showHUDWarning(msg.message, 'warning');
@@ -184,6 +198,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (telemRtt) {
         telemRtt.textContent = '-- ms';
         telemRtt.className = 'telem-val';
+      }
+      if (navRtt) {
+        navRtt.textContent = '-- ms';
+        if (navRttBadge) navRttBadge.className = 'nav-rtt-pill';
       }
       clearInterval(heartbeatTimer);
       clearInterval(pingInterval);
