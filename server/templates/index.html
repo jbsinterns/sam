@@ -6,7 +6,7 @@
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>{{ rover_name }} Mobile Teleoperation Dashboard</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=2.6">
+  <link rel="stylesheet" href="/static/css/style.css?v=3.1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -26,16 +26,27 @@
         {{ 'ACTIVE' if (initial_telemetry and initial_telemetry.hardware_leased) else 'STANDBY' }}
       </span>
 
-      <!-- Nav Latency / Ping Badge -->
-      <div class="nav-rtt-pill" id="nav-rtt-badge" title="WebSocket Ping Latency (Round Trip Time)">
-        <span class="nav-rtt-dot"></span>
-        <span class="nav-rtt-val" id="nav-rtt">-- ms</span>
-      </div>
-
       <!-- Power / Thermal Warning Pill (Surfaced proactively before brownout) -->
       <div class="vitals-alert-pill" id="vitals-alert-pill" style="display: none;" title="Raspberry Pi Power/Thermal Warning">
         <span class="vitals-alert-dot"></span>
         <span id="vitals-alert-label">LOW VOLT</span>
+      </div>
+    </div>
+
+    <!-- Desktop Telemetry Cluster (Center Navbar - Desktop Only) -->
+    <div class="nav-telemetry desktop-only" id="nav-telemetry">
+      <div class="nav-chip" id="nav-rtt-badge" title="WebSocket Ping Latency (Round Trip Time)">
+        <span class="nav-dot" id="nav-rtt-dot"></span>
+        <span class="nav-chip-lbl">PING</span>
+        <span class="nav-chip-val" id="nav-rtt">-- ms</span>
+      </div>
+      <div class="nav-chip" id="nav-action-badge" title="Active Rover Motion">
+        <span class="nav-chip-lbl">MOTION</span>
+        <span class="nav-chip-val highlight" id="nav-action-text">STOPPED</span>
+      </div>
+      <div class="nav-chip" id="nav-temp-badge" title="Raspberry Pi CPU Temperature">
+        <span class="nav-chip-lbl">CPU</span>
+        <span class="nav-chip-val val-cyan" id="nav-cpu-temp">--°C</span>
       </div>
     </div>
 
@@ -149,7 +160,23 @@
         <img id="camera-stream" src="/api/video/feed" alt="SAM Live Camera Stream"
           style="width:100%; height:100%; object-fit:cover;">
 
-        <!-- Live HUD Overlay -->
+        <div class="camera-paused-overlay" id="camera-paused-overlay">
+          <svg class="icon-svg-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+          </svg>
+          <span>Camera Stream Paused</span>
+        </div>
+
+        <div class="camera-reconnecting-overlay" id="camera-reconnecting-overlay">
+          <div class="spinner-ring"></div>
+          <span>Reconnecting Video Feed...</span>
+        </div>
+
+        <!-- Camera Shutter Flash Effect -->
+        <div class="shutter-flash-overlay" id="shutter-flash-overlay"></div>
+
+        <!-- Live HUD Overlay (Persistent across camera stream & paused states) -->
         <div class="hud-overlay">
           <div class="hud-item hud-top-left">
             <span class="hud-label">MODE:</span>
@@ -168,63 +195,11 @@
             <span id="hud-warning-text">READY</span>
           </div>
         </div>
-
-        <div class="camera-paused-overlay" id="camera-paused-overlay">
-          <svg class="icon-svg-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-            <line x1="1" y1="1" x2="23" y2="23"></line>
-          </svg>
-          <span>Camera Stream Paused</span>
-        </div>
-
-        <div class="camera-reconnecting-overlay" id="camera-reconnecting-overlay">
-          <div class="spinner-ring"></div>
-          <span>Reconnecting Video Feed...</span>
-        </div>
-
-        <!-- Camera Shutter Flash Effect -->
-        <div class="shutter-flash-overlay" id="shutter-flash-overlay"></div>
       </div>
 
       <!-- Desktop Only: Mission Telemetry Console (Below Video on Left) -->
       <div class="desktop-telemetry-panel desktop-only" id="desktop-telemetry">
-        <!-- Section 1: Rover Control Command & Actions -->
-        <div class="telem-col telem-motion">
-          <div class="telem-header">
-            <div class="telem-title-wrap">
-              <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path
-                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-                </path>
-              </svg>
-              <span class="telem-title">ROVER CONTROL & ACTIONS</span>
-            </div>
-            <span class="telem-badge idle" id="telem-action-badge">IDLE</span>
-          </div>
-          <div class="telem-stats-row">
-            <div class="telem-stat">
-              <span class="telem-lbl">ACTION</span>
-              <span class="telem-val highlight" id="telem-action-text">STOPPED</span>
-            </div>
-            <div class="telem-stat">
-              <span class="telem-lbl">LINEAR</span>
-              <span class="telem-val" id="telem-cmd-linear">0.0%</span>
-            </div>
-            <div class="telem-stat">
-              <span class="telem-lbl">ANGULAR</span>
-              <span class="telem-val" id="telem-cmd-angular">0.0%</span>
-            </div>
-            <div class="telem-stat">
-              <span class="telem-lbl">MOTORS</span>
-              <span class="telem-val" id="telem-motors-lr">L: 0% | R: 0%</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="telem-divider"></div>
-
-        <!-- Section 2: WebSocket & Real-Time Connection -->
+        <!-- Section 1: WebSocket & Network Connection -->
         <div class="telem-col telem-network">
           <div class="telem-header">
             <div class="telem-title-wrap">
@@ -243,19 +218,15 @@
           </div>
           <div class="telem-stats-row">
             <div class="telem-stat">
-              <span class="telem-lbl">RTT</span>
-              <span class="telem-val val-cyan" id="telem-rtt">-- ms</span>
+              <span class="telem-lbl">LINK</span>
+              <span class="telem-val val-green" id="telem-link-quality">STABLE</span>
             </div>
             <div class="telem-stat">
               <span class="telem-lbl">RATE</span>
               <span class="telem-val" id="telem-rate">10 Hz</span>
             </div>
             <div class="telem-stat">
-              <span class="telem-lbl">TX / RX</span>
-              <span class="telem-val" id="telem-packets">TX: 0 | RX: 0</span>
-            </div>
-            <div class="telem-stat">
-              <span class="telem-lbl">LEASE</span>
+              <span class="telem-lbl">OPERATOR</span>
               <span class="telem-val val-lease" id="telem-lease-status">UNCLAIMED</span>
             </div>
           </div>
@@ -280,8 +251,8 @@
           </div>
           <div class="telem-stats-row">
             <div class="telem-stat">
-              <span class="telem-lbl">CPU TEMP</span>
-              <span class="telem-val val-cyan" id="telem-cpu-temp">--°C</span>
+              <span class="telem-lbl">THROTTLE</span>
+              <span class="telem-val val-green" id="telem-core-health">NORMAL</span>
             </div>
             <div class="telem-stat">
               <span class="telem-lbl">CPU LOAD</span>
@@ -603,9 +574,9 @@
   </script>
 
   <!-- Scripts -->
-  <script src="/static/js/joystick.js?v=3.0"></script>
-  <script src="/static/js/controls.js?v=3.0"></script>
-  <script src="/static/js/app.js?v=3.0"></script>
+  <script src="/static/js/joystick.js?v=3.3"></script>
+  <script src="/static/js/controls.js?v=3.3"></script>
+  <script src="/static/js/app.js?v=3.8"></script>
 </body>
 
 </html>

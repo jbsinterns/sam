@@ -88,7 +88,7 @@ class TeleopControls {
 
   _initKeyboard() {
     window.addEventListener('keydown', (e) => {
-      if (['input', 'textarea'].includes(document.activeElement.tagName.toLowerCase())) return;
+      if (document.activeElement?.tagName && ['input', 'textarea'].includes(document.activeElement.tagName.toLowerCase())) return;
       const key = e.key.toLowerCase();
       if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
         e.preventDefault();
@@ -192,8 +192,8 @@ class TeleopControls {
       this.gamepadIndex = e.gamepad.index;
       const statusEl = document.getElementById('gamepad-status');
       const labelEl = document.getElementById('gamepad-label');
-      statusEl.classList.add('active');
-      labelEl.textContent = `Connected: ${e.gamepad.id.slice(0, 28)}...`;
+      if (statusEl) statusEl.classList.add('active');
+      if (labelEl) labelEl.textContent = `Connected: ${e.gamepad.id.slice(0, 20)}...`;
       this._startGamepadPoll();
     });
 
@@ -211,7 +211,7 @@ class TeleopControls {
         const statusEl = document.getElementById('gamepad-status');
         const labelEl = document.getElementById('gamepad-label');
         if (statusEl) statusEl.classList.remove('active');
-        if (labelEl) labelEl.textContent = 'Gamepad: Disconnected (Plug in USB/Xbox controller)';
+        if (labelEl) labelEl.textContent = 'Gamepad Off';
       }
     });
   }

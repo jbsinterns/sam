@@ -47,20 +47,22 @@ document.addEventListener('DOMContentLoaded', () => {
   let videoRetryTimer = null;
   let videoRetryDelay = 800;
 
-  // Desktop Mission Telemetry Elements (Below Video Feed on Left)
-  const telemActionBadge = document.getElementById('telem-action-badge');
-  const telemActionText = document.getElementById('telem-action-text');
-  const telemCmdLinear = document.getElementById('telem-cmd-linear');
-  const telemCmdAngular = document.getElementById('telem-cmd-angular');
-  const telemMotorsLr = document.getElementById('telem-motors-lr');
-  const telemWsPill = document.getElementById('telem-ws-pill');
-  const telemWsState = document.getElementById('telem-ws-state');
-  const telemRtt = document.getElementById('telem-rtt');
-  const telemRate = document.getElementById('telem-rate');
-  const telemPackets = document.getElementById('telem-packets');
-  const telemLeaseStatus = document.getElementById('telem-lease-status');
+  // Desktop Navbar Telemetry Elements
   const navRtt = document.getElementById('nav-rtt');
   const navRttBadge = document.getElementById('nav-rtt-badge');
+  const navActionText = document.getElementById('nav-action-text');
+  const navCpuTemp = document.getElementById('nav-cpu-temp');
+
+  // Desktop Mission Telemetry Elements (Non-duplicated, Below Video Feed on Left)
+  const telemWsPill = document.getElementById('telem-ws-pill');
+  const telemWsState = document.getElementById('telem-ws-state');
+  const telemLinkQuality = document.getElementById('telem-link-quality');
+  const telemRate = document.getElementById('telem-rate');
+  const telemLeaseStatus = document.getElementById('telem-lease-status');
+  const telemCoreHealth = document.getElementById('telem-core-health');
+  const telemCpuLoad = document.getElementById('telem-cpu-load');
+  const telemRamUsage = document.getElementById('telem-ram-usage');
+  const telemPwrStatus = document.getElementById('telem-pwr-status');
 
   let txPackets = 0;
   let rxPackets = 0;
@@ -79,10 +81,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const ICON_LOCKED = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`;
   const ICON_UNLOCKED = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>`;
 
-  // Prevent sticky mobile button glow / focus lock
+  // Prevent sticky mobile button glow / focus lock without closing text inputs
   document.addEventListener('touchend', () => {
     if (document.activeElement && document.activeElement.blur) {
-      document.activeElement.blur();
+      const tag = document.activeElement.tagName ? document.activeElement.tagName.toLowerCase() : '';
+      if (!['input', 'textarea'].includes(tag)) {
+        document.activeElement.blur();
+      }
     }
   }, { passive: true });
 
@@ -153,28 +158,33 @@ document.addEventListener('DOMContentLoaded', () => {
             frameCounter = 0;
             lastRateTimestamp = now;
           }
-          if (telemPackets) telemPackets.textContent = `TX: ${txPackets} | RX: ${rxPackets}`;
           handleTelemetry(msg.data);
         } else if (msg.type === 'pong') {
           const rtt = Math.round(performance.now() - msg.t);
-          const colorClass = (
-            rtt < 40 ? 'val-green' :
-            rtt < 100 ? 'val-cyan' :
-            rtt < 200 ? 'val-amber' : 'val-red'
+          const rttColorClass = (
+            rtt < 40 ? 'rtt-green' :
+            rtt < 100 ? 'rtt-cyan' :
+            rtt < 200 ? 'rtt-amber' : 'rtt-red'
           );
-          if (telemRtt) {
-            telemRtt.textContent = `${rtt} ms`;
-            telemRtt.className = `telem-val ${colorClass}`;
-          }
           if (navRtt) {
             navRtt.textContent = `${rtt} ms`;
             if (navRttBadge) {
-              const badgeClass = (
-                rtt < 40 ? 'rtt-green' :
-                rtt < 100 ? 'rtt-cyan' :
-                rtt < 200 ? 'rtt-amber' : 'rtt-red'
-              );
-              navRttBadge.className = `nav-rtt-pill ${badgeClass}`;
+              navRttBadge.className = `nav-chip ${rttColorClass}`;
+            }
+          }
+          if (telemLinkQuality) {
+            if (rtt < 45) {
+              telemLinkQuality.textContent = 'EXCELLENT';
+              telemLinkQuality.className = 'telem-val val-green';
+            } else if (rtt < 100) {
+              telemLinkQuality.textContent = 'STABLE';
+              telemLinkQuality.className = 'telem-val val-cyan';
+            } else if (rtt < 200) {
+              telemLinkQuality.textContent = 'FAIR';
+              telemLinkQuality.className = 'telem-val val-amber';
+            } else {
+              telemLinkQuality.textContent = 'LAGGY';
+              telemLinkQuality.className = 'telem-val val-red';
             }
           }
         } else if (msg.type === 'warning') {
@@ -195,13 +205,13 @@ document.addEventListener('DOMContentLoaded', () => {
         telemWsPill.classList.remove('connected');
         telemWsPill.classList.add('disconnected');
       }
-      if (telemRtt) {
-        telemRtt.textContent = '-- ms';
-        telemRtt.className = 'telem-val';
-      }
       if (navRtt) {
         navRtt.textContent = '-- ms';
-        if (navRttBadge) navRttBadge.className = 'nav-rtt-pill';
+        if (navRttBadge) navRttBadge.className = 'nav-chip';
+      }
+      if (telemLinkQuality) {
+        telemLinkQuality.textContent = 'OFFLINE';
+        telemLinkQuality.className = 'telem-val val-red';
       }
       clearInterval(heartbeatTimer);
       clearInterval(pingInterval);
@@ -228,49 +238,58 @@ document.addEventListener('DOMContentLoaded', () => {
         operator_id: clientId,
       }));
       txPackets++;
-      if (telemPackets) telemPackets.textContent = `TX: ${txPackets} | RX: ${rxPackets}`;
     }
 
     // Resolve motion action for desktop telemetry
     let action = 'STOPPED';
     let badgeClass = 'idle';
 
-    if (Math.abs(lin) < 0.04 && Math.abs(ang) < 0.04) {
+    const deadzone = 3.0; // 3% deadzone
+    const absLin = Math.abs(lin);
+    const absAng = Math.abs(ang);
+
+    if (absLin < deadzone && absAng < deadzone) {
       action = 'STOPPED';
       badgeClass = 'idle';
-    } else if (lin > 0.04 && Math.abs(ang) <= 0.25) {
-      action = 'FORWARD';
+    } else if (absAng <= Math.max(deadzone, absLin * 0.35)) {
+      // Dominantly linear forward/backward
+      action = lin > 0 ? 'FORWARD' : 'REVERSE';
       badgeClass = 'moving';
-    } else if (lin < -0.04 && Math.abs(ang) <= 0.25) {
-      action = 'REVERSE';
-      badgeClass = 'moving';
-    } else if (ang > 0.25 && lin > 0.04) {
-      action = 'CURVE RIGHT';
+    } else if (absLin > deadzone && absAng > deadzone) {
+      // Combined driving and steering: curve
+      if (lin > 0) {
+        action = ang > 0 ? 'CURVE RIGHT' : 'CURVE LEFT';
+      } else {
+        action = ang > 0 ? 'REV RIGHT' : 'REV LEFT';
+      }
       badgeClass = 'turning';
-    } else if (ang < -0.25 && lin > 0.04) {
-      action = 'CURVE LEFT';
-      badgeClass = 'turning';
-    } else if (ang > 0.25 && lin < -0.04) {
-      action = 'REV RIGHT';
-      badgeClass = 'turning';
-    } else if (ang < -0.25 && lin < -0.04) {
-      action = 'REV LEFT';
-      badgeClass = 'turning';
-    } else if (ang > 0.25) {
-      action = 'PIVOT RIGHT';
-      badgeClass = 'turning';
-    } else if (ang < -0.25) {
-      action = 'PIVOT LEFT';
+    } else {
+      // Dominantly turning (pivot in place)
+      action = ang > 0 ? 'PIVOT RIGHT' : 'PIVOT LEFT';
       badgeClass = 'turning';
     }
 
-    if (telemActionBadge) {
-      telemActionBadge.textContent = action;
-      telemActionBadge.className = `telem-badge ${badgeClass}`;
+    currentAction = action;
+    if (navActionText) {
+      navActionText.textContent = action;
+      navActionText.className = action === 'STOPPED' ? 'nav-chip-val' : 'nav-chip-val highlight';
     }
-    if (telemActionText) telemActionText.textContent = action;
-    if (telemCmdLinear) telemCmdLinear.textContent = `${(lin * 100).toFixed(0)}%`;
-    if (telemCmdAngular) telemCmdAngular.textContent = `${(ang * 100).toFixed(0)}%`;
+
+    // Instant responsive motor feedback on camera HUD (confirmed continuously by Pi telemetry)
+    if (hudMotors) {
+      if (!motorsEnabled || action === 'STOPPED') {
+        hudMotors.textContent = 'L:0% R:0%';
+      } else {
+        const normAng = Math.max(-1.0, Math.min(1.0, ang / 100.0));
+        const curvedAng = (0.3 * (normAng ** 3) + 0.7 * normAng) * 100.0;
+        let left = lin + curvedAng;
+        let right = lin - curvedAng;
+        const maxMag = Math.max(Math.abs(left), Math.abs(right), 100.0);
+        left = Math.round((left / maxMag) * 100.0);
+        right = Math.round((right / maxMag) * 100.0);
+        hudMotors.textContent = `L:${left}% R:${right}%`;
+      }
+    }
   }
 
   // --- Lease & Role UI Helper ---
@@ -357,12 +376,11 @@ document.addEventListener('DOMContentLoaded', () => {
       hudMode.style.color = 'var(--accent-cyan)';
     }
 
-    // 4. Motor Readouts
-    if (data.motors) {
+    // 4. Motor Readouts (Live Camera Overlay)
+    if (hudMotors && data.motors) {
       const ls = Math.round(data.motors.left_speed || 0);
       const rs = Math.round(data.motors.right_speed || 0);
       hudMotors.textContent = `L:${ls}% R:${rs}%`;
-      if (telemMotorsLr) telemMotorsLr.textContent = `L: ${ls}% | R: ${rs}%`;
     }
 
     if (telemLeaseStatus) {
@@ -442,12 +460,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 8. Raspberry Pi Vital Statistics
     if (data.vitals) {
-      const telemCpuTemp = document.getElementById('telem-cpu-temp');
-      const telemCpuLoad = document.getElementById('telem-cpu-load');
-      const telemRamUsage = document.getElementById('telem-ram-usage');
-      const telemPwrStatus = document.getElementById('telem-pwr-status');
+      const cpuTemp = data.vitals.cpu_temp;
+      if (navCpuTemp) {
+        if (cpuTemp !== null && cpuTemp !== undefined) {
+          navCpuTemp.textContent = `${Math.round(cpuTemp)}°C`;
+          navCpuTemp.className = cpuTemp >= 75 ? 'nav-chip-val val-red' : (cpuTemp >= 65 ? 'nav-chip-val val-amber' : 'nav-chip-val val-cyan');
+        } else {
+          navCpuTemp.textContent = '--°C';
+          navCpuTemp.className = 'nav-chip-val val-cyan';
+        }
+      }
 
-      if (telemCpuTemp) telemCpuTemp.textContent = `${data.vitals.cpu_temp ?? '--'}°C`;
+      if (telemCoreHealth) {
+        if (data.vitals.undervoltage) {
+          telemCoreHealth.textContent = 'LOW VOLT';
+          telemCoreHealth.className = 'telem-val val-red';
+        } else if (cpuTemp && cpuTemp >= 80) {
+          telemCoreHealth.textContent = 'OVERHEAT';
+          telemCoreHealth.className = 'telem-val val-red';
+        } else if (cpuTemp && cpuTemp >= 70) {
+          telemCoreHealth.textContent = 'WARM';
+          telemCoreHealth.className = 'telem-val val-amber';
+        } else {
+          telemCoreHealth.textContent = 'NORMAL';
+          telemCoreHealth.className = 'telem-val val-green';
+        }
+      }
+
       if (telemCpuLoad) telemCpuLoad.textContent = `${data.vitals.cpu_load ?? 0}%`;
       if (telemRamUsage) telemRamUsage.textContent = `${data.vitals.ram_usage ?? 0}%`;
       if (telemPwrStatus) {
@@ -468,6 +507,8 @@ document.addEventListener('DOMContentLoaded', () => {
         action: currentAction,
         cmd_linear: (lastLinearCmd * 100).toFixed(1),
         cmd_angular: (lastAngularCmd * 100).toFixed(1),
+        tx_packets: txPackets,
+        rx_packets: rxPackets,
         motor_left: data.motors ? Math.round(data.motors.left_speed || 0) : 0,
         motor_right: data.motors ? Math.round(data.motors.right_speed || 0) : 0,
         sonar_front: data.ultrasonic && data.ultrasonic.distances ? data.ultrasonic.distances.front : '',
@@ -975,6 +1016,18 @@ document.addEventListener('DOMContentLoaded', () => {
   if (cameraStreamImg && cameraEnabled) {
     reloadVideoStream();
   }
+
+  // Expose Hardware Diagnostics & Raw Control Debug Interface (usable in DevTools console or test scripts)
+  window.samDebug = {
+    getDriveCommand: () => ({ linear: lastLinearCmd, angular: lastAngularCmd, action: currentAction }),
+    getPackets: () => ({ tx: txPackets, rx: rxPackets }),
+    getLogBuffer: () => logBuffer,
+    controls: controls,
+    getMotors: () => ({ enabled: motorsEnabled }),
+    printStatus: () => {
+      console.log(`[SAM TELEMETRY DEBUG] Linear: ${(lastLinearCmd * 100).toFixed(1)}% | Angular: ${(lastAngularCmd * 100).toFixed(1)}% | Action: ${currentAction} | TX: ${txPackets} | RX: ${rxPackets}`);
+    }
+  };
 
   // Start WebSocket
   connectWebSocket();
