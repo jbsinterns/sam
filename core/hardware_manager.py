@@ -51,6 +51,7 @@ class HardwareManager:
         self.critical_stop_cm = self.cfg["safety"].get("obstacle_critical_stop_cm", 15.0)
 
         # Background Supervisors
+        self._lease_lock = threading.RLock()
         self._is_running = True
         self._supervisor_thread = threading.Thread(target=self._supervisor_loop, daemon=True)
         self._sensor_thread = threading.Thread(target=self._sensor_polling_loop, daemon=True)
@@ -67,48 +68,59 @@ class HardwareManager:
         Dynamically claims GPIO pins when web UI or operator requests drive control.
         Always grants control to the claiming operator, seamlessly handing over the active lease.
         """
-        now = time.time()
-        client_key = operator_id or "driver"
+        with self._lease_lock:
+            now = time.time()
+            client_key = operator_id or "driver"
 
-        self.active_operator_id = client_key
-        self.active_operator_name = operator_name or "Driver"
+            self.active_operator_id = client_key
+            self.active_operator_name = operator_name or "Driver"
 
-        if not self.is_hardware_leased:
-            print(f"[HardwareManager] Acquiring hardware pins & camera for {self.active_operator_name} ({self.active_operator_id})...")
-            self.motors.initialize()
-            if self.sensors_enabled:
-                self.ultrasonic.initialize()
-            self.leds.initialize()
-            self.buzzer.initialize()
-            self.camera.start()
-            self.is_hardware_leased = True
+            if not self.is_hardware_leased:
+                print(f"[HardwareManager] Acquiring hardware pins & camera for {self.active_operator_name} ({self.active_operator_id})...")
+                self.motors.initialize()
+                if self.sensors_enabled:
+                    self.ultrasonic.initialize()
+                self.leds.initialize()
+                self.buzzer.initialize()
+                self.camera.start()
+                self.is_hardware_leased = True
 
-        self.last_activity_time = now
-        self.last_heartbeat_time = now
-        return {
-            "success": True,
-            "role": "operator",
-            "operator_id": self.active_operator_id,
-            "operator_name": self.active_operator_name,
-            "hardware_leased": True,
-        }
+            self.last_activity_time = now
+            self.last_heartbeat_time = now
+            return {
+                "success": True,
+                "role": "operator",
+                "operator_id": self.active_operator_id,
+                "operator_name": self.active_operator_name,
+                "hardware_leased": True,
+            }
 
     def release_control(self, operator_id: Optional[str] = None, force: bool = True) -> Dict[str, Any]:
         """
         Explicitly releases all GPIO pins and camera, leaving hardware completely free.
+        Guards against non-operators releasing another active operator's lease.
         """
-        if self.is_hardware_leased:
-            print("[HardwareManager] Releasing hardware pins & camera to free state...")
-            self.motors.cleanup()
-            self.ultrasonic.cleanup()
-            self.leds.cleanup()
-            self.buzzer.cleanup()
-            self.camera.stop()
-            self.is_hardware_leased = False
-            self.active_operator_id = None
-            self.active_operator_name = None
+        with self._lease_lock:
+            if operator_id and not force:
+                if (
+                    self.active_operator_id
+                    and operator_id != self.active_operator_id
+                    and self.active_operator_id not in ("driver", "primary-operator")
+                ):
+                    return {"success": False, "reason": "Not the active operator", "hardware_leased": self.is_hardware_leased}
 
-        return {"success": True, "hardware_leased": False}
+            if self.is_hardware_leased:
+                print("[HardwareManager] Releasing hardware pins & camera to free state...")
+                self.motors.cleanup()
+                self.ultrasonic.cleanup()
+                self.leds.cleanup()
+                self.buzzer.cleanup()
+                self.camera.stop()
+                self.is_hardware_leased = False
+                self.active_operator_id = None
+                self.active_operator_name = None
+
+            return {"success": True, "hardware_leased": False}
 
     def heartbeat(self, operator_id: Optional[str] = None) -> None:
         """Refreshes watchdog timer from teleop client."""

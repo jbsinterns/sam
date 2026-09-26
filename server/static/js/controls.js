@@ -12,6 +12,7 @@ class TeleopControls {
 
     this.gamepadIndex = null;
     this.gamepadLoopId = null;
+    this.gamepadWasMoving = false;
 
     this._initKeyboard();
     this._initDpad();
@@ -199,15 +200,26 @@ class TeleopControls {
     window.addEventListener('gamepaddisconnected', (e) => {
       if (this.gamepadIndex === e.gamepad.index) {
         this.gamepadIndex = null;
+        if (this.gamepadLoopId) {
+          cancelAnimationFrame(this.gamepadLoopId);
+          this.gamepadLoopId = null;
+        }
+        if (this.gamepadWasMoving) {
+          this.sendDrive(0.0, 0.0);
+          this.gamepadWasMoving = false;
+        }
         const statusEl = document.getElementById('gamepad-status');
         const labelEl = document.getElementById('gamepad-label');
-        statusEl.classList.remove('active');
-        labelEl.textContent = 'Gamepad: Disconnected (Plug in USB/Xbox controller)';
+        if (statusEl) statusEl.classList.remove('active');
+        if (labelEl) labelEl.textContent = 'Gamepad: Disconnected (Plug in USB/Xbox controller)';
       }
     });
   }
 
   _startGamepadPoll() {
+    if (this.gamepadLoopId) {
+      cancelAnimationFrame(this.gamepadLoopId);
+    }
     const poll = () => {
       if (this.gamepadIndex === null) return;
       const gp = navigator.getGamepads()[this.gamepadIndex];
@@ -223,6 +235,11 @@ class TeleopControls {
         // If stick is moved, send command
         if (rawLinear !== 0 || rawAngular !== 0) {
           this.sendDrive(rawLinear * this.speedLimit, rawAngular * this.speedLimit);
+          this.gamepadWasMoving = true;
+        } else if (this.gamepadWasMoving) {
+          // Immediately halt rover when stick returns to neutral center
+          this.sendDrive(0.0, 0.0);
+          this.gamepadWasMoving = false;
         }
       }
       this.gamepadLoopId = requestAnimationFrame(poll);

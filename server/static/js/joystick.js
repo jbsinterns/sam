@@ -67,6 +67,14 @@ class VirtualJoystick {
     window.addEventListener('mousemove', (e) => this._onMouseMove(e));
     window.addEventListener('mouseup', () => this._onMouseUp());
 
+    // Fail-safes: reset if window loses focus or pointer exits viewport while dragging
+    window.addEventListener('blur', () => {
+      if (this.isDragging) this._resetHandle();
+    });
+    document.addEventListener('mouseleave', () => {
+      if (this.isDragging) this._resetHandle();
+    });
+
     // Explicitly prevent context menu on right click or touch long-press
     this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }

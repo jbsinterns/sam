@@ -3,13 +3,14 @@ SAM Rover - Directional LED Controller
 Controls 4 directional LEDs (Front, Rear, Left, Right).
 """
 
+import threading
 from typing import Dict, Any
 from core.hal.base import BaseHardwareDevice
 
 
 class LEDController(BaseHardwareDevice):
     """
-    Manages 4 directional indicator LEDs.
+    Manages 4 directional indicator LEDs with thread-safe control.
     """
 
     def __init__(self, pin_config: Dict[str, int], is_mock: bool = False):
@@ -22,6 +23,7 @@ class LEDController(BaseHardwareDevice):
             "right": False,
         }
         self._gpio = None
+        self._lock = threading.Lock()
 
     def initialize(self) -> bool:
         if self.is_initialized:
@@ -55,46 +57,56 @@ class LEDController(BaseHardwareDevice):
 
     def set_led(self, direction: str, is_on: bool) -> bool:
         """Sets the state of a single directional LED."""
-        if direction not in self.pins:
-            return False
+        with self._lock:
+            if direction not in self.pins:
+                return False
 
-        if not self.is_initialized:
-            self.initialize()
+            if not self.is_initialized:
+                self.initialize()
 
-        self.state[direction] = bool(is_on)
+            self.state[direction] = bool(is_on)
 
-        if not self.is_mock and self._gpio:
-            pin = self.pins[direction]
-            self._gpio.output(pin, self._gpio.HIGH if is_on else self._gpio.LOW)
+            if not self.is_mock and self._gpio:
+                pin = self.pins[direction]
+                try:
+                    self._gpio.output(pin, self._gpio.HIGH if is_on else self._gpio.LOW)
+                except Exception:
+                    pass
 
-        return True
+            return True
 
     def toggle(self, direction: str) -> bool:
         """Toggles the state of a specific LED."""
-        curr = self.state.get(direction, False)
+        with self._lock:
+            curr = self.state.get(direction, False)
         return self.set_led(direction, not curr)
 
     def set_all(self, is_on: bool) -> None:
         """Turns all LEDs ON or OFF."""
-        for d in self.pins.keys():
+        with self._lock:
+            keys = list(self.pins.keys())
+        for d in keys:
             self.set_led(d, is_on)
 
     def cleanup(self) -> None:
         """Turns off all LEDs and releases pins."""
-        self.set_all(False)
-        if not self.is_mock and self._gpio:
-            try:
-                self._gpio.cleanup(list(self.pins.values()))
-            except Exception as e:
-                print(f"[LEDs] Cleanup warning: {e}")
-        self.is_initialized = False
-        print("[LEDs] Hardware pins released.")
+        with self._lock:
+            self.set_all(False)
+            if not self.is_mock and self._gpio:
+                try:
+                    self._gpio.cleanup(list(self.pins.values()))
+                except Exception as e:
+                    print(f"[LEDs] Cleanup warning: {e}")
+            self.is_initialized = False
+            print("[LEDs] Hardware pins released.")
 
     def get_status(self) -> Dict[str, Any]:
+        with self._lock:
+            state_copy = dict(self.state)
         return {
             "name": self.name,
             "initialized": self.is_initialized,
             "mock": self.is_mock,
-            "state": self.state,
+            "state": state_copy,
             "error": self.last_error,
         }
