@@ -1,0 +1,17 @@
+# Core Framework & Server
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+websockets>=12.0
+pyyaml>=6.0.1
+pydantic>=2.6.0
+
+# Computer Vision & Camera
+opencv-python>=4.8.0; platform_system != "Linux"
+opencv-python-headless>=4.8.0; platform_system == "Linux"
+numpy>=1.24.0
+
+# Raspberry Pi Hardware (Installed on Linux Pi; ignored/mocked on Windows/Mac)
+# Note: On Ubuntu 24.04/26.04, lgpio / gpiozero is the modern standard.
+# gpiozero>=2.0; platform_machine == "aarch64" or platform_machine == "armv7l"
+# rpi-lgpio>=0.6; platform_machine == "aarch64" or platform_machine == "armv7l"
+

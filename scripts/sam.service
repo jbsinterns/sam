@@ -1,0 +1,15 @@
+[Unit]
+Description=SAM Rover Teleoperation Web & Autonomy Server
+After=network.target network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/ubuntu/raspberry/sam
+ExecStart=/usr/bin/python3 -m uvicorn server.app:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

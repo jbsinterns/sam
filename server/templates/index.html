@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>{{ rover_name }} Mobile Teleoperation Dashboard</title>
+  <link rel="stylesheet" href="/static/css/style.css?v=2.5">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
+</head>
+
+<body oncontextmenu="return false;">
+
+  <!-- Header: Mobile Optimized with Zero Right-Edge Overflow -->
+  <header class="top-nav">
+    <div class="brand">
+      <div class="status-dot pulse" id="connection-dot"></div>
+      <span class="rover-title">{{ rover_name }}</span>
+      <span class="badge {% if initial_telemetry and initial_telemetry.hardware_leased %}active{% endif %}"
+        id="lease-badge">
+        {{ 'ACTIVE' if (initial_telemetry and initial_telemetry.hardware_leased) else 'STANDBY' }}
+      </span>
+
+      <!-- Power / Thermal Warning Pill (Surfaced proactively before brownout) -->
+      <div class="vitals-alert-pill" id="vitals-alert-pill" style="display: none;" title="Raspberry Pi Power/Thermal Warning">
+        <span class="vitals-alert-dot"></span>
+        <span id="vitals-alert-label">LOW VOLT</span>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <!-- Hardware Claim/Release Button (Dynamic Color & Icon) -->
+      <button
+        class="btn btn-lease {% if initial_telemetry and initial_telemetry.hardware_leased %}claimed{% else %}free{% endif %}"
+        id="btn-toggle-lease" title="Claim or release GPIO & Camera">
+        <span id="lease-icon-wrap">
+          {% if initial_telemetry and initial_telemetry.hardware_leased %}
+          <!-- Locked icon when claimed -->
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          {% else %}
+          <!-- Unlocked icon when free -->
+          <svg class="icon-svg" id="icon-unlocked" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+          </svg>
+          {% endif %}
+        </span>
+        <span class="btn-text" id="lease-btn-text">{{ 'Release' if (initial_telemetry and
+          initial_telemetry.hardware_leased) else 'Claim' }}</span>
+      </button>
+
+      <!-- Instant Camera Snapshot Button -->
+      <button class="btn btn-outline btn-sm icon-btn" id="btn-snapshot" title="Capture & Download Camera Snapshot">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+          <circle cx="12" cy="13" r="4"></circle>
+        </svg>
+      </button>
+
+      <!-- Network Manager Trigger -->
+      <button class="btn btn-outline btn-sm icon-btn" id="btn-open-wifi" title="Manage Wi-Fi & Hotspot">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+          <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+          <line x1="12" y1="20" x2="12.01" y2="20"></line>
+        </svg>
+      </button>
+
+
+      <!-- Emergency Stop (Guaranteed Visible on Right) -->
+      <button class="btn btn-danger btn-sm estop-btn" id="btn-estop" title="Emergency Stop">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <rect x="9" y="9" width="6" height="6"></rect>
+        </svg>
+        <span>STOP</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mobile Top System Toggles (Sized precisely for any phone screen) -->
+  <section class="toggles-bar mobile-only">
+    <!-- Motors Toggle -->
+    <button
+      class="toggle-pill toggle-motors-btn {% if not initial_telemetry or initial_telemetry.motors_enabled %}active{% endif %}"
+      id="toggle-motors" title="Enable/Disable Motor Outputs">
+      <span class="pill-dot"></span>
+      <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path
+          d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+        </path>
+      </svg>
+      <span>Motors</span>
+    </button>
+
+    <!-- Camera Toggle -->
+    <button
+      class="toggle-pill toggle-camera-btn {% if not initial_telemetry or initial_telemetry.camera_enabled %}active{% endif %}"
+      id="toggle-camera" title="Enable/Disable Camera Stream">
+      <span class="pill-dot"></span>
+      <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+        <circle cx="12" cy="13" r="4"></circle>
+      </svg>
+      <span>Camera</span>
+    </button>
+
+    <!-- Ultrasonic Sensors Toggle (NEW DISTINCT SONAR/RADAR WAVE ICON) -->
+    <button
+      class="toggle-pill toggle-sensors-btn {% if not initial_telemetry or initial_telemetry.sensors_enabled %}active{% endif %}"
+      id="toggle-sensors" title="Enable/Disable Ultrasonic Polling">
+      <span class="pill-dot"></span>
+      <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="2.5" fill="currentColor"></circle>
+        <path d="M16.24 7.76a6 6 0 0 1 0 8.49"></path>
+        <path d="M7.76 16.24a6 6 0 0 1 0-8.49"></path>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+        <path d="M4.93 19.07a10 10 0 0 1 0-14.14"></path>
+      </svg>
+      <span>Sensors</span>
+    </button>
+
+  </section>
+
+  <!-- Mobile Viewport: Camera & Control in Synchronous View -->
+  <main class="mobile-viewport-container">
+
+    <!-- 1. Live Camera Feed with HUD -->
+    <section class="video-card">
+      <div class="video-container" id="video-wrapper">
+        <img id="camera-stream" src="/api/video/feed" alt="SAM Live Camera Stream"
+          style="width:100%; height:100%; object-fit:cover;">
+
+        <!-- Live HUD Overlay -->
+        <div class="hud-overlay">
+          <div class="hud-item hud-top-left">
+            <span class="hud-label">MODE:</span>
+            <span class="hud-val" id="hud-mode">ASSISTED</span>
+          </div>
+          <div class="hud-item hud-top-right">
+            <span class="hud-label">GEAR:</span>
+            <span class="hud-val" id="hud-gear">60%</span>
+          </div>
+          <div class="hud-crosshair"></div>
+          <div class="hud-item hud-bottom-left">
+            <span class="hud-label">MOTORS:</span>
+            <span class="hud-val" id="hud-motors">L:0% R:0%</span>
+          </div>
+          <div class="hud-item hud-bottom-right" id="hud-warning-box">
+            <span id="hud-warning-text">READY</span>
+          </div>
+        </div>
+
+        <div class="camera-paused-overlay" id="camera-paused-overlay">
+          <svg class="icon-svg-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+          </svg>
+          <span>Camera Stream Paused</span>
+        </div>
+
+        <div class="camera-reconnecting-overlay" id="camera-reconnecting-overlay">
+          <div class="spinner-ring"></div>
+          <span>Reconnecting Video Feed...</span>
+        </div>
+
+        <!-- Camera Shutter Flash Effect -->
+        <div class="shutter-flash-overlay" id="shutter-flash-overlay"></div>
+      </div>
+
+      <!-- Desktop Only: Mission Telemetry Console (Below Video on Left) -->
+      <div class="desktop-telemetry-panel desktop-only" id="desktop-telemetry">
+        <!-- Section 1: Rover Control Command & Actions -->
+        <div class="telem-col telem-motion">
+          <div class="telem-header">
+            <div class="telem-title-wrap">
+              <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                </path>
+              </svg>
+              <span class="telem-title">ROVER CONTROL & ACTIONS</span>
+            </div>
+            <span class="telem-badge idle" id="telem-action-badge">IDLE</span>
+          </div>
+          <div class="telem-stats-row">
+            <div class="telem-stat">
+              <span class="telem-lbl">ACTION</span>
+              <span class="telem-val highlight" id="telem-action-text">STOPPED</span>
+            </div>
+            <div class="telem-stat">
+              <span class="telem-lbl">LINEAR</span>
+              <span class="telem-val" id="telem-cmd-linear">0.0%</span>
+            </div>
+            <div class="telem-stat">
+              <span class="telem-lbl">ANGULAR</span>
+              <span class="telem-val" id="telem-cmd-angular">0.0%</span>
+            </div>
+            <div class="telem-stat">
+              <span class="telem-lbl">MOTORS</span>
+              <span class="telem-val" id="telem-motors-lr">L: 0% | R: 0%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="telem-divider"></div>
+
+        <!-- Section 2: WebSocket & Real-Time Connection -->
+        <div class="telem-col telem-network">
+          <div class="telem-header">
+            <div class="telem-title-wrap">
+              <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                <line x1="12" y1="20" x2="12.01" y2="20"></line>
+              </svg>
+              <span class="telem-title">WEBSOCKET & LINK</span>
+            </div>
+            <span class="telem-status-pill connected" id="telem-ws-pill">
+              <span class="telem-dot"></span>
+              <span id="telem-ws-state">LIVE</span>
+            </span>
+          </div>
+          <div class="telem-stats-row">
+            <div class="telem-stat">
+              <span class="telem-lbl">RTT</span>
+              <span class="telem-val val-cyan" id="telem-rtt">-- ms</span>
+            </div>
+            <div class="telem-stat">
+              <span class="telem-lbl">RATE</span>
+              <span class="telem-val" id="telem-rate">10 Hz</span>
+            </div>
+            <div class="telem-stat">
+              <span class="telem-lbl">TX / RX</span>
+              <span class="telem-val" id="telem-packets">TX: 0 | RX: 0</span>
+            </div>
+            <div class="telem-stat">
+              <span class="telem-lbl">LEASE</span>
+              <span class="telem-val val-lease" id="telem-lease-status">UNCLAIMED</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="telem-divider"></div>
+
+        <!-- Section 3: Pi Vitals & Blackbox Flight Logger -->
+        <div class="telem-col telem-vitals">
+          <div class="telem-header">
+            <div class="telem-title-wrap">
+              <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+                <line x1="4" y1="22" x2="4" y2="15"></line>
+              </svg>
+              <span class="telem-title">PI VITALS & LOGGER</span>
+            </div>
+            <div class="blackbox-btns">
+              <button class="btn-rec" id="btn-toggle-log" title="Start/Stop Blackbox Telemetry Recording">REC</button>
+              <button class="btn-export" id="btn-export-log" title="Download Session CSV" disabled>EXPORT</button>
+            </div>
+          </div>
+          <div class="telem-stats-row">
+            <div class="telem-stat">
+              <span class="telem-lbl">CPU TEMP</span>
+              <span class="telem-val val-cyan" id="telem-cpu-temp">--°C</span>
+            </div>
+            <div class="telem-stat">
+              <span class="telem-lbl">CPU LOAD</span>
+              <span class="telem-val" id="telem-cpu-load">--%</span>
+            </div>
+            <div class="telem-stat">
+              <span class="telem-lbl">RAM</span>
+              <span class="telem-val" id="telem-ram-usage">--%</span>
+            </div>
+            <div class="telem-stat">
+              <span class="telem-lbl">POWER</span>
+              <span class="telem-val val-green" id="telem-pwr-status">OK</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Teleoperation Controls Area -->
+    <section class="controls-card">
+      <div class="controls-header">
+        <div class="control-tabs">
+          <button class="tab-btn active" id="tab-btn-dpad">
+            <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="6" width="20" height="12" rx="3"></rect>
+              <path d="M6 12h4m-2-2v4"></path>
+            </svg>
+            <span>D-Pad</span>
+          </button>
+          <button class="tab-btn" id="tab-btn-joystick">
+            <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="9"></circle>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <span>Joystick</span>
+          </button>
+        </div>
+
+        <div class="gamepad-badge" id="gamepad-status" title="External Controller">
+          <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="6" width="20" height="12" rx="3"></rect>
+            <path d="M6 12h4m-2-2v4"></path>
+            <circle cx="17" cy="10" r="1"></circle>
+            <circle cx="15" cy="13" r="1"></circle>
+          </svg>
+          <span id="gamepad-label">Gamepad Off</span>
+        </div>
+      </div>
+
+      <div class="touch-control-zone" id="touch-zone">
+        <!-- Directional D-Pad (Default Primary Control) -->
+        <div class="control-view active" id="view-dpad">
+          <div class="dpad-grid">
+            <div></div>
+            <button class="dpad-btn" id="btn-up" data-dir="forward">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <polyline points="18 15 12 9 6 15"></polyline>
+              </svg>
+            </button>
+            <div></div>
+            <button class="dpad-btn" id="btn-left" data-dir="left">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+            <button class="dpad-btn stop-center" id="btn-stop-center" data-dir="stop">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <rect x="9" y="9" width="6" height="6"></rect>
+              </svg>
+            </button>
+            <button class="dpad-btn" id="btn-right" data-dir="right">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+            <div></div>
+            <button class="dpad-btn" id="btn-down" data-dir="backward">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div></div>
+          </div>
+        </div>
+
+        <!-- Virtual Touch Analog Joystick (Secondary Control) -->
+        <div class="control-view" id="view-joystick">
+          <div class="joystick-wrapper" id="joystick-container">
+            <canvas id="joystick-canvas" width="190" height="190"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Speed Presets Placed BELOW Controls -->
+      <div class="speed-control-strip">
+        <span class="speed-title">Speed Preset</span>
+        <div class="gear-buttons">
+          <button class="btn-gear" data-speed="30">30%</button>
+          <button class="btn-gear active" data-speed="60">60%</button>
+          <button class="btn-gear" data-speed="90">90%</button>
+        </div>
+        <div class="slider-group">
+          <input type="range" id="speed-slider" min="25" max="100" step="5" value="60">
+          <span class="slider-val" id="speed-slider-val">60%</span>
+        </div>
+
+        <!-- Software Motor Trim (Desktop Only) -->
+        <div class="trim-group desktop-only" id="trim-group" title="Steering Trim: Adjust straight-line motor balance">
+          <span class="trim-label">Trim</span>
+          <input type="range" id="trim-slider" min="-15" max="15" value="0" step="1">
+          <span class="trim-val" id="trim-val">0</span>
+        </div>
+      </div>
+
+      <!-- Desktop System Toggles Bar (Placed on right side below controls, above LEDs) -->
+      <div class="toggles-bar desktop-only">
+        <button
+          class="toggle-pill toggle-motors-btn {% if not initial_telemetry or initial_telemetry.motors_enabled %}active{% endif %}"
+          title="Enable/Disable Motor Outputs">
+          <span class="pill-dot"></span>
+          <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+            </path>
+          </svg>
+          <span>Motors</span>
+        </button>
+
+        <button
+          class="toggle-pill toggle-camera-btn {% if not initial_telemetry or initial_telemetry.camera_enabled %}active{% endif %}"
+          title="Enable/Disable Camera Stream">
+          <span class="pill-dot"></span>
+          <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+            <circle cx="12" cy="13" r="4"></circle>
+          </svg>
+          <span>Camera</span>
+        </button>
+
+        <button
+          class="toggle-pill toggle-sensors-btn {% if not initial_telemetry or initial_telemetry.sensors_enabled %}active{% endif %}"
+          title="Enable/Disable Ultrasonic Polling">
+          <span class="pill-dot"></span>
+          <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="2.5" fill="currentColor"></circle>
+            <path d="M16.24 7.76a6 6 0 0 1 0 8.49"></path>
+            <path d="M7.76 16.24a6 6 0 0 1 0-8.49"></path>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+            <path d="M4.93 19.07a10 10 0 0 1 0-14.14"></path>
+          </svg>
+          <span>Sensors</span>
+        </button>
+
+      </div>
+
+      <!-- Directional 4 LEDs (Front, Rear, Left, Right) + All + Horn to the right of All -->
+      <div class="led-bar">
+        <div class="led-grid">
+          <button class="btn-led led-front-btn" id="led-front" data-dir="front" title="Front LED (Green)">
+            <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="18 15 12 9 6 15"></polyline>
+            </svg>
+            <span>Front</span>
+          </button>
+          <button class="btn-led led-rear-btn" id="led-rear" data-dir="rear" title="Rear LED (Red)">
+            <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+            <span>Rear</span>
+          </button>
+          <button class="btn-led led-left-btn" id="led-left" data-dir="left" title="Left LED (Yellow)">
+            <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+            <span>Left</span>
+          </button>
+          <button class="btn-led led-right-btn" id="led-right" data-dir="right" title="Right LED (Yellow)">
+            <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+            <span>Right</span>
+          </button>
+          <button class="btn-led btn-led-all" id="btn-leds-all" title="Toggle All LEDs">
+            <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path>
+            </svg>
+            <span>All</span>
+          </button>
+          <button class="btn-led btn-led-horn toggle-horn-btn" id="btn-horn" title="Manual Horn / Buzzer (Hold or Click)">
+            <svg class="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+            <span>Horn</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Ultrasonic Proximity & 2D Sonar Radar Container -->
+      <div class="sonar-radar-card" id="sonar-radar-card">
+        <!-- 2D Top-Down Sonar Radar Widget (Desktop Only) -->
+        <div class="radar-box desktop-only">
+          <svg class="radar-svg" viewBox="0 0 160 160">
+            <!-- Distance guideline rings -->
+            <circle cx="80" cy="80" r="70" class="radar-ring"></circle>
+            <circle cx="80" cy="80" r="45" class="radar-ring"></circle>
+            <circle cx="80" cy="80" r="22" class="radar-ring"></circle>
+            <!-- 4 Dynamic Radar Cones -->
+            <path id="radar-arc-front" class="radar-arc" d="M 52 42 Q 80 18 108 42 L 95 64 Q 80 54 65 64 Z"
+              fill="rgba(16, 185, 129, 0.45)"></path>
+            <path id="radar-arc-rear" class="radar-arc" d="M 52 118 Q 80 142 108 118 L 95 96 Q 80 106 65 96 Z"
+              fill="rgba(16, 185, 129, 0.45)"></path>
+            <path id="radar-arc-left" class="radar-arc" d="M 42 52 Q 18 80 42 108 L 64 95 Q 54 80 64 65 Z"
+              fill="rgba(16, 185, 129, 0.45)"></path>
+            <path id="radar-arc-right" class="radar-arc" d="M 118 52 Q 142 80 118 108 L 96 95 Q 106 80 96 65 Z"
+              fill="rgba(16, 185, 129, 0.45)"></path>
+            <!-- Rover Body Center -->
+            <rect x="68" y="65" width="24" height="30" rx="4" class="radar-rover-chassis"></rect>
+            <!-- Rover Wheels -->
+            <rect x="62" y="67" width="5" height="10" rx="1" class="radar-rover-wheel"></rect>
+            <rect x="62" y="83" width="5" height="10" rx="1" class="radar-rover-wheel"></rect>
+            <rect x="93" y="67" width="5" height="10" rx="1" class="radar-rover-wheel"></rect>
+            <rect x="93" y="83" width="5" height="10" rx="1" class="radar-rover-wheel"></rect>
+            <!-- Front Heading Pointer -->
+            <polygon points="80,68 76,73 84,73" fill="#06b6d4"></polygon>
+          </svg>
+        </div>
+
+        <!-- 2x2 Sensor Cards Grid -->
+        <div class="proximity-strip" id="proximity-strip">
+          <div class="prox-card" id="card-sensor-front">
+            <div class="prox-meta"><span class="prox-label">FRONT</span><span class="prox-val"
+                id="val-sensor-front">--</span></div>
+            <div class="prox-bar">
+              <div class="prox-fill" id="bar-sensor-front"></div>
+            </div>
+          </div>
+          <div class="prox-card" id="card-sensor-rear">
+            <div class="prox-meta"><span class="prox-label">REAR</span><span class="prox-val"
+                id="val-sensor-rear">--</span></div>
+            <div class="prox-bar">
+              <div class="prox-fill" id="bar-sensor-rear"></div>
+            </div>
+          </div>
+          <div class="prox-card" id="card-sensor-left">
+            <div class="prox-meta"><span class="prox-label">LEFT</span><span class="prox-val"
+                id="val-sensor-left">--</span></div>
+            <div class="prox-bar">
+              <div class="prox-fill" id="bar-sensor-left"></div>
+            </div>
+          </div>
+          <div class="prox-card" id="card-sensor-right">
+            <div class="prox-meta"><span class="prox-label">RIGHT</span><span class="prox-val"
+                id="val-sensor-right">--</span></div>
+            <div class="prox-bar">
+              <div class="prox-fill" id="bar-sensor-right"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Wi-Fi & Hotspot Modal -->
+  <div class="modal" id="wifi-modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+            <line x1="12" y1="20" x2="12.01" y2="20"></line>
+          </svg>
+          Network & Wireless Adapters
+        </h3>
+        <button class="btn-close" id="btn-close-wifi">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <h4>Detected Interfaces</h4>
+        <div class="interfaces-list" id="interfaces-list">
+          <div class="loader">Scanning network hardware...</div>
+        </div>
+
+        <hr>
+
+        <div class="wifi-scan-header">
+          <h4>Available Wi-Fi Networks</h4>
+          <button class="btn btn-sm btn-outline" id="btn-rescan-wifi">Scan</button>
+        </div>
+        <div class="wifi-networks-list" id="wifi-networks-list">
+          <!-- Populated via JS -->
+        </div>
+
+        <hr>
+
+        <h4>Connect to Network</h4>
+        <div class="connect-form">
+          <input type="text" id="wifi-ssid" placeholder="Network SSID">
+          <input type="password" id="wifi-password" placeholder="Password (if any)">
+          <button class="btn btn-primary" id="btn-submit-wifi">Connect</button>
+        </div>
+        <div class="wifi-msg" id="wifi-msg"></div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Initial Server State for Instant Hydration -->
+  <script id="initial-telemetry-data" type="application/json">
+    {{ json_initial_telemetry | safe }}
+  </script>
+
+  <!-- Scripts -->
+  <script src="/static/js/joystick.js?v=2.5"></script>
+  <script src="/static/js/controls.js?v=2.5"></script>
+  <script src="/static/js/app.js?v=2.5"></script>
+</body>
+
+</html>

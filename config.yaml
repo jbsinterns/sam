@@ -1,0 +1,86 @@
+# ==============================================================================
+# SAM Rover (Smart Autonomous Mobile Rover) - Central Configuration
+# ==============================================================================
+
+system:
+  name: "SAM"
+  version: "2.0.0"
+  # 'auto' detects if running on Raspberry Pi; if False/PC, runs simulated hardware
+  mock_hardware: "auto"
+  port: 8000
+  host: "0.0.0.0"
+
+# --- GPIO Pin Mapping (BCM Numbers) ---
+# Note: These can be customized to match your exact physical wiring.
+gpio:
+  motors:
+    left:
+      ena: 12   # PWM speed control
+      in1: 5    # Direction forward
+      in2: 6    # Direction backward
+    right:
+      enb: 13   # PWM speed control
+      in3: 19   # Direction forward
+      in4: 26   # Direction backward
+    pwm_frequency: 1000
+    min_duty_cycle: 25.0  # Deadband stiction compensation: minimum PWM duty cycle for 20 RPM gearboxes
+    steering_expo: 0.3    # Exponential steering curve (0.0 = linear, 0.3 = smooth center)
+
+  ultrasonic:
+    # 4-Directional HC-SR04 Sensors
+    # IMPORTANT: Ensure Echo pins use 1k/2k voltage dividers to protect Pi (3.3V)
+    front:
+      trigger: 23
+      echo: 24
+    rear:
+      trigger: 27
+      echo: 22
+    left:
+      trigger: 17
+      echo: 18
+    right:
+      trigger: 25
+      echo: 8
+
+  leds:
+    # 4 Directional Indicator LEDs (via 220-330 ohm resistors)
+    front: 4
+    rear: 14
+    left: 15
+    right: 16
+
+  buzzer: 20  # Active piezo buzzer / horn pin (BCM)
+
+  imu:
+    # Reserved I2C bus pins (GPIO 2 = SDA, GPIO 3 = SCL)
+    bus: 1
+    addresses: [0x68, 0x69] # Auto-scanned
+
+# --- Safety & Control Parameters ---
+safety:
+  # If teleoperation packet is not received within this time (seconds), stop motors
+  watchdog_timeout_sec: 0.50
+  
+  # Distance threshold in cm for obstacle avoidance
+  obstacle_warning_cm: 35.0
+  obstacle_critical_stop_cm: 15.0
+
+  # Automatic GPIO release when web UI is inactive for this duration (seconds)
+  idle_hardware_release_sec: 60.0
+
+# --- Camera Configuration ---
+camera:
+  # Port auto-scan will check indices 0 through 4
+  preferred_index: 0
+  width: 1280
+  height: 720
+  fps: 25
+  jpeg_quality: 80
+
+# --- Networking Configuration ---
+network:
+  ap_interface: "wlan0"
+  ap_ssid: "SAM-Rover-Setup"
+  ap_ip: "192.168.4.1"
+  external_interface: "wlan1"
+  wifi_check_interval_sec: 15

@@ -1,0 +1,22 @@
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Virtual Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Distribution & Packaging
+build/
+dist/
+*.egg-info/
+
+# Local logs & OS artifacts
+*.log
+.DS_Store
+Thumbs.db
