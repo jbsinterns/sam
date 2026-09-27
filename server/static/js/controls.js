@@ -4,8 +4,9 @@
  */
 
 class TeleopControls {
-  constructor(onDriveCommand) {
+  constructor(onDriveCommand, onSpeedChange = null) {
     this.sendDrive = onDriveCommand;
+    this.onSpeedChange = onSpeedChange;
     this.speedLimit = 60; // Default gear (60%)
     this.activeKeys = new Set();
     this.activeDpadDirection = null;
@@ -13,12 +14,20 @@ class TeleopControls {
     this.gamepadIndex = null;
     this.gamepadLoopId = null;
     this.gamepadWasMoving = false;
+    this.enabled = false;
 
     this._initKeyboard();
     this._initDpad();
     this._initGearSelector();
     this._initGamepad();
     this._preventUnwantedGestures();
+  }
+
+  setEnabled(enabled) {
+    this.enabled = !!enabled;
+    if (!this.enabled && this.activeKeys.size > 0) {
+      this.activeKeys.clear();
+    }
   }
 
   setSpeed(val, saveStorage = true) {
@@ -39,6 +48,10 @@ class TeleopControls {
       try {
         localStorage.setItem('sam_speed_limit', this.speedLimit);
       } catch (e) {}
+    }
+
+    if (typeof this.onSpeedChange === 'function') {
+      this.onSpeedChange(this.speedLimit);
     }
   }
 
@@ -115,6 +128,7 @@ class TeleopControls {
   }
 
   _processKeyboardDrive() {
+    if (!this.enabled) return;
     if (this.activeKeys.has(' ')) {
       this.sendDrive(0.0, 0.0);
       return;

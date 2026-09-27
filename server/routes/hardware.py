@@ -30,7 +30,7 @@ def get_telemetry():
 @router.post("/acquire")
 def acquire_hardware(payload: Optional[LeasePayload] = None):
     """Claims GPIO pins for web control with operator lease arbitration."""
-    p_id = payload.operator_id if (payload and payload.operator_id) else "driver"
+    p_id = payload.operator_id if (payload and payload.operator_id) else None
     p_name = payload.operator_name if (payload and payload.operator_name) else "Driver"
     force = payload.force if (payload and payload.force is not None) else True
     return hw_manager.acquire_control(operator_id=p_id, operator_name=p_name, force=force)
@@ -42,6 +42,18 @@ def release_hardware(payload: Optional[LeasePayload] = None):
     p_id = payload.operator_id if payload else None
     force = payload.force if (payload and payload.force is not None) else True
     return hw_manager.release_control(operator_id=p_id, force=force)
+
+
+
+class SpeedPayload(BaseModel):
+    speed: int
+
+
+@router.post("/speed")
+def set_speed_limit(payload: SpeedPayload):
+    """Updates the active speed limit gear on the rover hardware."""
+    hw_manager.speed_limit = int(payload.speed)
+    return {"speed_limit": hw_manager.speed_limit}
 
 
 @router.post("/emergency_stop")

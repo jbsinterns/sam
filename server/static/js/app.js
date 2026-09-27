@@ -18,13 +18,17 @@ document.addEventListener('DOMContentLoaded', () => {
   let isHardwareLeased = false;
 
   // Client Session & Operator Lease Arbitration
-  let clientId = localStorage.getItem('sam_client_id');
+  let clientId = sessionStorage.getItem('sam_client_id');
   if (!clientId) {
     clientId = 'user_' + Math.random().toString(36).substring(2, 8);
-    localStorage.setItem('sam_client_id', clientId);
+    sessionStorage.setItem('sam_client_id', clientId);
   }
   let currentOperatorId = null;
   let activeOperatorName = null;
+
+  function canUserControl() {
+    return isHardwareLeased && !!currentOperatorId && currentOperatorId === clientId;
+  }
 
   // Toggle states
   let motorsEnabled = true;
@@ -224,9 +228,27 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Drive Sender ---
+  let lastUnclaimedWarnTime = 0;
   function sendDriveCommand(linear, angular) {
     const lin = parseFloat(linear);
     const ang = parseFloat(angular);
+
+    if (!canUserControl()) {
+      // Trigger the red HUD overlay warning when user interacts without control
+      if (Math.abs(lin) > 2 || Math.abs(ang) > 2) {
+        const now = performance.now();
+        if (now - lastUnclaimedWarnTime > 1500) {
+          lastUnclaimedWarnTime = now;
+          if (!isHardwareLeased) {
+            showHUDWarning('Hardware unclaimed. Press Claim button to control.', 'warning');
+          } else {
+            showHUDWarning(`Observer mode: Rover controlled by ${activeOperatorName || 'Driver'}`, 'warning');
+          }
+        }
+      }
+      return;
+    }
+
     lastLinearCmd = lin;
     lastAngularCmd = ang;
 
@@ -252,11 +274,9 @@ document.addEventListener('DOMContentLoaded', () => {
       action = 'STOPPED';
       badgeClass = 'idle';
     } else if (absAng <= Math.max(deadzone, absLin * 0.35)) {
-      // Dominantly linear forward/backward
       action = lin > 0 ? 'FORWARD' : 'REVERSE';
       badgeClass = 'moving';
     } else if (absLin > deadzone && absAng > deadzone) {
-      // Combined driving and steering: curve
       if (lin > 0) {
         action = ang > 0 ? 'CURVE RIGHT' : 'CURVE LEFT';
       } else {
@@ -264,7 +284,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       badgeClass = 'turning';
     } else {
-      // Dominantly turning (pivot in place)
       action = ang > 0 ? 'PIVOT RIGHT' : 'PIVOT LEFT';
       badgeClass = 'turning';
     }
@@ -275,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
       navActionText.className = action === 'STOPPED' ? 'nav-chip-val' : 'nav-chip-val highlight';
     }
 
-    // Instant responsive motor feedback on camera HUD (confirmed continuously by Pi telemetry)
+    // Live responsive motor feedback on camera HUD for active driver
     if (hudMotors) {
       if (!motorsEnabled || action === 'STOPPED') {
         hudMotors.textContent = 'L:0% R:0%';
@@ -294,12 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Lease & Role UI Helper ---
   function updateLeaseUI() {
-    const isMe = isHardwareLeased && (
-      !currentOperatorId ||
-      currentOperatorId === clientId ||
-      currentOperatorId === 'driver' ||
-      currentOperatorId === 'primary-operator'
-    );
+    const isMe = isHardwareLeased && !!currentOperatorId && currentOperatorId === clientId;
 
     if (!isHardwareLeased) {
       leaseBadge.textContent = 'STANDBY';
@@ -307,23 +321,26 @@ document.addEventListener('DOMContentLoaded', () => {
       btnToggleLease.className = 'btn btn-lease free';
       leaseBtnText.textContent = 'Claim';
       if (leaseIconWrap) leaseIconWrap.innerHTML = ICON_UNLOCKED;
+      if (controls) controls.setEnabled(false);
     } else if (isMe) {
       leaseBadge.textContent = 'DRIVER (YOU)';
       leaseBadge.className = 'badge active';
       btnToggleLease.className = 'btn btn-lease claimed';
       leaseBtnText.textContent = 'Release';
       if (leaseIconWrap) leaseIconWrap.innerHTML = ICON_LOCKED;
+      if (controls) controls.setEnabled(true);
     } else {
       leaseBadge.textContent = 'OBSERVER';
       leaseBadge.className = 'badge observer';
       btnToggleLease.className = 'btn btn-lease free';
       leaseBtnText.textContent = 'Take Control';
       if (leaseIconWrap) leaseIconWrap.innerHTML = ICON_UNLOCKED;
+      if (controls) controls.setEnabled(false);
     }
 
     if (telemLeaseStatus) {
       telemLeaseStatus.textContent = isHardwareLeased ? (isMe ? 'CLAIMED (YOU)' : 'OBSERVER') : 'UNCLAIMED';
-      telemLeaseStatus.className = `telem-val val-lease ${isHardwareLeased ? 'claimed' : 'unclaimed'}`;
+      telemLeaseStatus.className = `telem-val val-lease ${isHardwareLeased ? (isMe ? 'claimed' : 'unclaimed') : 'unclaimed'}`;
     }
   }
 
@@ -367,8 +384,15 @@ document.addEventListener('DOMContentLoaded', () => {
       cameraPausedOverlay.classList.add('show');
     }
 
-    // 3. Operating Mode HUD (Assisted with safety stop when sensors ON, Manual when OFF)
-    if (!sensorsEnabled) {
+    // 3. Operating Mode HUD & Driver Gear Reflection
+    const canControl = canUserControl();
+    if (!isHardwareLeased) {
+      hudMode.textContent = 'STANDBY';
+      hudMode.style.color = 'var(--text-muted, #94a3b8)';
+    } else if (!canControl) {
+      hudMode.textContent = 'OBSERVER';
+      hudMode.style.color = 'var(--accent-purple, #a855f7)';
+    } else if (!sensorsEnabled) {
       hudMode.textContent = 'MANUAL';
       hudMode.style.color = 'var(--accent-amber)';
     } else {
@@ -376,16 +400,53 @@ document.addEventListener('DOMContentLoaded', () => {
       hudMode.style.color = 'var(--accent-cyan)';
     }
 
-    // 4. Motor Readouts (Live Camera Overlay)
-    if (hudMotors && data.motors) {
-      const ls = Math.round(data.motors.left_speed || 0);
-      const rs = Math.round(data.motors.right_speed || 0);
-      hudMotors.textContent = `L:${ls}% R:${rs}%`;
+    // Reflect Driver's Gear on Camera HUD & Observer Presets
+    if (data.speed_limit) {
+      const hudGear = document.getElementById('hud-gear');
+      if (hudGear) hudGear.textContent = `${data.speed_limit}%`;
+      const sliderVal = document.getElementById('speed-slider-val');
+      const slider = document.getElementById('speed-slider');
+
+      if (!canControl) {
+        if (sliderVal) sliderVal.textContent = `${data.speed_limit}%`;
+        if (slider) slider.value = data.speed_limit;
+        document.querySelectorAll('.btn-gear').forEach(btn => {
+          btn.classList.toggle('active', parseInt(btn.dataset.speed, 10) === data.speed_limit);
+        });
+        if (controls) controls.speedLimit = data.speed_limit;
+      }
     }
 
-    if (telemLeaseStatus) {
-      telemLeaseStatus.textContent = isHardwareLeased ? 'CLAIMED' : 'UNCLAIMED';
-      telemLeaseStatus.className = `telem-val val-lease ${isHardwareLeased ? 'claimed' : 'unclaimed'}`;
+    // 4. Motor Readouts on Live Camera HUD
+    // Displays real telemetry motor speed from rover (reflected to both driver and observer)
+    if (hudMotors) {
+      if (!isHardwareLeased) {
+        hudMotors.textContent = 'L:0% R:0%';
+      } else if (data.motors) {
+        const ls = Math.round(data.motors.left_speed || 0);
+        const rs = Math.round(data.motors.right_speed || 0);
+        hudMotors.textContent = `L:${ls}% R:${rs}%`;
+
+        // If observer, reflect the rover's real-time motion in desktop action chip
+        if (!canControl && navActionText) {
+          let obsAction = 'STOPPED';
+          if (ls === 0 && rs === 0) {
+            obsAction = 'STOPPED';
+          } else if (ls > 0 && rs > 0) {
+            obsAction = 'FORWARD';
+          } else if (ls < 0 && rs < 0) {
+            obsAction = 'REVERSE';
+          } else if (ls > 0 && rs <= 0) {
+            obsAction = 'PIVOT RIGHT';
+          } else if (ls <= 0 && rs > 0) {
+            obsAction = 'PIVOT LEFT';
+          } else {
+            obsAction = 'DRIVING';
+          }
+          navActionText.textContent = obsAction;
+          navActionText.className = obsAction === 'STOPPED' ? 'nav-chip-val' : 'nav-chip-val highlight';
+        }
+      }
     }
 
     // 5. Ultrasonic Proximity Strip Updates
@@ -532,8 +593,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }, type === 'caution' ? 1400 : 2200);
   }
 
+  // --- Speed Gear Synchronization Helper ---
+  function broadcastSpeed(speed) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'set_speed', speed: speed }));
+    }
+    fetch('/api/hardware/speed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ speed: speed }),
+    }).catch(() => {});
+  }
+
   // --- Initialize Teleop Controls ---
-  controls = new TeleopControls(sendDriveCommand);
+  controls = new TeleopControls(
+    (linear, angular) => sendDriveCommand(linear, angular),
+    (speed) => {
+      if (canUserControl()) {
+        broadcastSpeed(speed);
+      }
+    }
+  );
 
   joystick = new VirtualJoystick('joystick-canvas', (linear, angular) => {
     const scaledLinear = linear * controls.speedLimit;
@@ -681,12 +761,7 @@ document.addEventListener('DOMContentLoaded', () => {
     isLeaseToggling = true;
     btnToggleLease.style.pointerEvents = 'none';
 
-    const isClaimedByMe = isHardwareLeased && (
-      !currentOperatorId ||
-      currentOperatorId === clientId ||
-      currentOperatorId === 'driver' ||
-      currentOperatorId === 'primary-operator'
-    );
+    const isClaimedByMe = isHardwareLeased && !!currentOperatorId && currentOperatorId === clientId;
     const endpoint = isClaimedByMe ? '/api/hardware/release' : '/api/hardware/acquire';
 
     try {
@@ -706,6 +781,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isHardwareLeased) {
           currentOperatorId = data.operator_id || clientId;
           activeOperatorName = data.operator_name || 'Driver';
+          if (controls) broadcastSpeed(controls.speedLimit);
         } else {
           currentOperatorId = null;
           activeOperatorName = null;

@@ -75,6 +75,9 @@ async def websocket_teleop_endpoint(websocket: WebSocket):
                             "message": res.get("reason"),
                         }))
 
+                elif mtype == "set_speed":
+                    hw_manager.speed_limit = int(msg.get("speed", 60))
+
                 elif mtype == "stop":
                     hw_manager.emergency_stop()
 
@@ -139,10 +142,7 @@ async def websocket_teleop_endpoint(websocket: WebSocket):
             hw_manager.is_hardware_leased
             and hw_manager.active_operator_id
             and client_operator_id
-            and (
-                client_operator_id == hw_manager.active_operator_id
-                or client_operator_id in ("driver", "primary-operator")
-            )
+            and client_operator_id == hw_manager.active_operator_id
         )
         if is_active_driver:
             print(f"[Teleop WS] Active operator ({client_operator_id}) disconnected. Safe emergency stop triggered.")

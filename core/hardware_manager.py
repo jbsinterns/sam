@@ -49,6 +49,7 @@ class HardwareManager:
         self.idle_release_timeout = self.cfg["safety"].get("idle_hardware_release_sec", 60.0)
         self.warning_stop_cm = self.cfg["safety"].get("obstacle_warning_cm", 35.0)
         self.critical_stop_cm = self.cfg["safety"].get("obstacle_critical_stop_cm", 15.0)
+        self.speed_limit = 60
 
         # Background Supervisors
         self._lease_lock = threading.RLock()
@@ -66,17 +67,15 @@ class HardwareManager:
     def acquire_control(self, operator_id: Optional[str] = None, operator_name: Optional[str] = None, force: bool = True) -> Dict[str, Any]:
         """
         Dynamically claims GPIO pins when web UI or operator requests drive control.
-        Always grants control to the claiming operator, seamlessly handing over the active lease.
+        Seamlessly hands over the active lease to the requesting operator for local network control.
         """
         with self._lease_lock:
             now = time.time()
             client_key = operator_id or "driver"
 
-            self.active_operator_id = client_key
-            self.active_operator_name = operator_name or "Driver"
-
+            client_name = operator_name or "Driver"
             if not self.is_hardware_leased:
-                print(f"[HardwareManager] Acquiring hardware pins & camera for {self.active_operator_name} ({self.active_operator_id})...")
+                print(f"[HardwareManager] Acquiring hardware pins & camera for {client_name} ({client_key})...")
                 self.motors.initialize()
                 if self.sensors_enabled:
                     self.ultrasonic.initialize()
@@ -84,6 +83,9 @@ class HardwareManager:
                 self.buzzer.initialize()
                 self.camera.start()
                 self.is_hardware_leased = True
+
+            self.active_operator_id = client_key
+            self.active_operator_name = client_name
 
             self.last_activity_time = now
             self.last_heartbeat_time = now
@@ -98,19 +100,10 @@ class HardwareManager:
     def release_control(self, operator_id: Optional[str] = None, force: bool = True) -> Dict[str, Any]:
         """
         Explicitly releases all GPIO pins and camera, leaving hardware completely free.
-        Guards against non-operators releasing another active operator's lease.
         """
         with self._lease_lock:
-            if operator_id and not force:
-                if (
-                    self.active_operator_id
-                    and operator_id != self.active_operator_id
-                    and self.active_operator_id not in ("driver", "primary-operator")
-                ):
-                    return {"success": False, "reason": "Not the active operator", "hardware_leased": self.is_hardware_leased}
-
             if self.is_hardware_leased:
-                print("[HardwareManager] Releasing hardware pins & camera to free state...")
+                print(f"[HardwareManager] Releasing hardware pins & camera (released by {operator_id or 'operator'})...")
                 self.motors.cleanup()
                 self.ultrasonic.cleanup()
                 self.leds.cleanup()
@@ -124,13 +117,8 @@ class HardwareManager:
 
     def heartbeat(self, operator_id: Optional[str] = None) -> None:
         """Refreshes watchdog timer from teleop client."""
-        if (
-            not operator_id
-            or not self.active_operator_id
-            or operator_id == self.active_operator_id
-            or self.active_operator_id in ("driver", "primary-operator")
-            or operator_id in ("driver", "primary-operator")
-        ):
+        # Only refresh watchdog if heartbeat comes from active operator (or during standby)
+        if not self.active_operator_id or (operator_id and operator_id == self.active_operator_id):
             self.last_heartbeat_time = time.time()
             self.last_activity_time = time.time()
 
@@ -150,13 +138,7 @@ class HardwareManager:
                 "angular": 0.0,
             }
 
-        if (
-            self.active_operator_id
-            and operator_id
-            and operator_id != self.active_operator_id
-            and self.active_operator_id not in ("driver", "primary-operator")
-            and operator_id not in ("driver", "primary-operator")
-        ):
+        if self.active_operator_id and (not operator_id or operator_id != self.active_operator_id):
             return {
                 "blocked": True,
                 "throttled": False,
@@ -308,7 +290,7 @@ class HardwareManager:
 
                 # 2. Idle Hardware Auto-Release (frees pins for students if browser is closed)
                 if (now - self.last_activity_time) > self.idle_release_timeout:
-                    self.release_control()
+                    self.release_control(force=True)
                     try:
                         from core.logger import log_info
                         log_info("safety.lease", "IDLE_AUTO_RELEASE_TRIGGERED")
@@ -361,12 +343,13 @@ class HardwareManager:
             "rover_name": self.cfg["system"]["name"],
             "version": self.cfg["system"]["version"],
             "is_mock": self.is_mock,
-            "hardware_leased": self.is_hardware_leased,
-            "active_operator_id": self.active_operator_id,
-            "active_operator_name": self.active_operator_name,
+            "hardware_leased": bool(self.is_hardware_leased and self.active_operator_id),
+            "active_operator_id": self.active_operator_id if self.is_hardware_leased else None,
+            "active_operator_name": self.active_operator_name if self.is_hardware_leased else None,
             "motors_enabled": self.motors_enabled,
             "camera_enabled": self.camera_enabled,
             "sensors_enabled": self.sensors_enabled,
+            "speed_limit": self.speed_limit,
             "motors": self.motors.get_status(),
             "ultrasonic": self.ultrasonic.get_status(),
             "leds": self.leds.get_status(),
