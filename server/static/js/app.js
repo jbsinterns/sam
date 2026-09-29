@@ -632,6 +632,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (canUserControl()) {
         broadcastSpeed(speed);
       }
+    },
+    {
+      onHorn: (state) => triggerHorn(state),
+      onToggleLeds: () => {
+        const btnAll = document.getElementById('btn-leds-all');
+        if (btnAll) btnAll.click();
+      },
+      onEStop: () => {
+        const btnStop = document.getElementById('btn-estop');
+        if (btnStop) btnStop.click();
+      },
     }
   );
 

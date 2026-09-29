@@ -91,7 +91,16 @@ To prevent accidental conflicting inputs when multiple users view the same rover
 - **Touch Virtual Joystick (Mobile / Tablet)**:
   - Drag the thumbstick on the lower-left for proportional omnidirectional steering.
 - **Gamepad / Controller (Xbox / PlayStation / USB HID)**:
-  - Connect via Bluetooth or USB. Left stick controls forward/turn; `A`/`Cross` honks the horn; `X`/`Square` toggles lights.
+  - Connect via Bluetooth or USB. Auto-detected with HUD indicator:
+    - **Steering**: Left Stick horizontal (`axes[0]`) with 1.4x exponential curve for precision.
+    - **Dual Driving Modes**:
+      - *RC / Racing Trigger Mode*: Right Trigger (`RT`) accelerates forward, Left Trigger (`LT`) reverses / brakes.
+      - *Single-Stick Mode*: Left Stick vertical (`axes[1]`) provides proportional throttle if triggers are idle.
+    - **Action Buttons**:
+      - **`A` / Cross**: Audio Horn / Buzzer chirp (hold to sound).
+      - **`X` / Square**: Toggle Directional Headlights / LEDs.
+      - **`B` / Circle**: Instant Emergency Stop (E-Stop).
+      - **`LB` / `RB` (Bumpers) or D-Pad Up/Down**: Shift speed gears on the fly (`25%` $\leftrightarrow$ `50%` $\leftrightarrow$ `75%` $\leftrightarrow$ `100%`).
 
 ---
 
