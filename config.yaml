@@ -23,7 +23,8 @@ gpio:
       in3: 23   # Direction forward
       in4: 24   # Direction backward
     pwm_frequency: 100
-    min_duty_cycle: 15.0  # Deadband stiction compensation: minimum PWM duty cycle for 20 RPM gearboxes
+    min_duty_cycle: 10.0  # Deadband stiction compensation for 60 RPM gearboxes
+    slew_rate_step: 12.0  # Max acceleration step per 15ms control tick (~180ms from 0 to 100%)
     steering_expo: 0.3    # Exponential steering curve (0.0 = linear, 0.3 = smooth center)
     invert_left: false    # Set to true if left motor spins opposite
     invert_right: false   # Set to true if right motor spins opposite
@@ -63,7 +64,7 @@ safety:
   watchdog_timeout_sec: 0.50
   
   # Distance threshold in cm for obstacle avoidance
-  obstacle_warning_cm: 38.0
+  obstacle_warning_cm: 45.0
   obstacle_critical_stop_cm: 15.0
 
   # Automatic GPIO release when web UI is inactive for this duration (seconds)

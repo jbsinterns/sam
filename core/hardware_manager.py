@@ -192,6 +192,19 @@ class HardwareManager:
         throttled = False
         throttled_reason = None
 
+        # IMU Straight-Line Heading-Hold Assist (counteracts DC gearmotor asymmetry)
+        effective_angular = angular
+        if abs(linear) > 5.0 and abs(angular) < 1.0 and getattr(self, "imu", None) and self.imu.is_initialized:
+            gz = self.imu.data.get("gz", 0.0)
+            if abs(gz) > 1.2:
+                # Proportional gyro feedback trim (max ±5%)
+                trim = max(-5.0, min(5.0, -gz * 0.15))
+                effective_angular += trim
+
+        # Speed-Adaptive Obstacle Distance for 60 RPM Motors
+        speed_factor = abs(linear) / 100.0
+        effective_warning_cm = self.warning_stop_cm + (speed_factor * 15.0)
+
         # Obstacle avoidance check (active only when sensors are enabled)
         if self.sensors_enabled:
             front_dist = self.ultrasonic.distances.get("front")
@@ -201,8 +214,8 @@ class HardwareManager:
             if linear > 0 and front_dist is not None:
                 if front_dist <= self.critical_stop_cm:
                     # Critical zone: block forward drive, but allow steering away (angular) or reverse
-                    if abs(angular) > 0.01:
-                        self.motors.set_differential_drive(0.0, angular)
+                    if abs(effective_angular) > 0.01:
+                        self.motors.set_differential_drive(0.0, effective_angular, immediate=True)
                     else:
                         self.motors.stop()
                     _safe_increment_counter("obstacle_stops")
@@ -212,13 +225,13 @@ class HardwareManager:
                         "throttled": False,
                         "reason": f"Front obstacle too close ({front_dist}cm)",
                         "linear": 0.0,
-                        "angular": angular,
+                        "angular": effective_angular,
                     }
-                elif front_dist < self.warning_stop_cm:
+                elif front_dist < effective_warning_cm:
                     # Progressive smooth deceleration towards critical threshold
-                    span = max(1.0, float(self.warning_stop_cm - self.critical_stop_cm))
+                    span = max(1.0, float(effective_warning_cm - self.critical_stop_cm))
                     ratio = max(0.0, min(1.0, (front_dist - self.critical_stop_cm) / span))
-                    min_crawl = 22.0
+                    min_crawl = 20.0
                     max_allowed = float(self.speed_limit)
                     speed_cap = min_crawl + (ratio ** 1.3) * (max_allowed - min_crawl)
                     if linear > speed_cap:
@@ -229,8 +242,8 @@ class HardwareManager:
             # 2. Reverse checks
             if linear < 0 and rear_dist is not None:
                 if rear_dist <= self.critical_stop_cm:
-                    if abs(angular) > 0.01:
-                        self.motors.set_differential_drive(0.0, angular)
+                    if abs(effective_angular) > 0.01:
+                        self.motors.set_differential_drive(0.0, effective_angular, immediate=True)
                     else:
                         self.motors.stop()
                     _safe_increment_counter("obstacle_stops")
@@ -240,12 +253,12 @@ class HardwareManager:
                         "throttled": False,
                         "reason": f"Rear obstacle too close ({rear_dist}cm)",
                         "linear": 0.0,
-                        "angular": angular,
+                        "angular": effective_angular,
                     }
-                elif rear_dist < self.warning_stop_cm:
-                    span = max(1.0, float(self.warning_stop_cm - self.critical_stop_cm))
+                elif rear_dist < effective_warning_cm:
+                    span = max(1.0, float(effective_warning_cm - self.critical_stop_cm))
                     ratio = max(0.0, min(1.0, (rear_dist - self.critical_stop_cm) / span))
-                    min_crawl = 22.0
+                    min_crawl = 20.0
                     max_allowed = float(self.speed_limit)
                     speed_cap = min_crawl + (ratio ** 1.3) * (max_allowed - min_crawl)
                     if abs(linear) > speed_cap:
@@ -255,13 +268,13 @@ class HardwareManager:
 
         _safe_increment_counter("drive_commands")
 
-        self.motors.set_differential_drive(linear, angular)
+        self.motors.set_differential_drive(linear, effective_angular)
         return {
             "blocked": False,
             "throttled": throttled,
             "reason": throttled_reason,
             "linear": linear,
-            "angular": angular,
+            "angular": effective_angular,
         }
 
     def emergency_stop(self) -> None:
@@ -300,6 +313,9 @@ class HardwareManager:
                     front_dist = self.ultrasonic.distances.get("front")
                     rear_dist = self.ultrasonic.distances.get("rear")
 
+                    speed_factor = max(abs(curr_l), abs(curr_r)) / 100.0
+                    adaptive_warning_cm = self.warning_stop_cm + (speed_factor * 15.0)
+
                     # 1. Forward motion safety check
                     if (curr_l > 0 or curr_r > 0) and front_dist is not None:
                         if front_dist <= self.critical_stop_cm:
@@ -307,11 +323,11 @@ class HardwareManager:
                             self.motors.stop()
                             _safe_increment_counter("obstacle_stops")
                             log_warn("safety.obstacle", "ACTIVE_MOTION_CRITICAL_STOP", direction="front", distance_cm=front_dist)
-                        elif front_dist < self.warning_stop_cm:
+                        elif front_dist < adaptive_warning_cm:
                             # PROXIMITY DECELERATION: Proactively slow down motors in real time
-                            span = max(1.0, float(self.warning_stop_cm - self.critical_stop_cm))
+                            span = max(1.0, float(adaptive_warning_cm - self.critical_stop_cm))
                             ratio = max(0.0, min(1.0, (front_dist - self.critical_stop_cm) / span))
-                            min_crawl = 22.0
+                            min_crawl = 20.0
                             max_allowed = float(self.speed_limit)
                             speed_cap = min_crawl + (ratio ** 1.3) * (max_allowed - min_crawl)
                             max_speed = max(curr_l, curr_r)
@@ -325,10 +341,10 @@ class HardwareManager:
                             self.motors.stop()
                             _safe_increment_counter("obstacle_stops")
                             log_warn("safety.obstacle", "ACTIVE_MOTION_CRITICAL_STOP", direction="rear", distance_cm=rear_dist)
-                        elif rear_dist < self.warning_stop_cm:
-                            span = max(1.0, float(self.warning_stop_cm - self.critical_stop_cm))
+                        elif rear_dist < adaptive_warning_cm:
+                            span = max(1.0, float(adaptive_warning_cm - self.critical_stop_cm))
                             ratio = max(0.0, min(1.0, (rear_dist - self.critical_stop_cm) / span))
-                            min_crawl = 22.0
+                            min_crawl = 20.0
                             max_allowed = float(self.speed_limit)
                             speed_cap = min_crawl + (ratio ** 1.3) * (max_allowed - min_crawl)
                             min_speed = min(curr_l, curr_r)

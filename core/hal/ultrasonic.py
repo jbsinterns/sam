@@ -1,6 +1,7 @@
 """
-SAM Rover - 4-Directional HC-SR04 Ultrasonic Sensor Controller
-Fault-isolated: A sensor failure or timeout will not hang the other sensors or server.
+SAM Rover - 4-Directional Ultrasonic Sensor Array (HC-SR04)
+Supports native lgpio (kernel gpiochip), RPi.GPIO fallback, and mock simulation.
+Provides asymmetric safety filtering and motion-prioritized scanning.
 """
 
 import time
@@ -13,7 +14,7 @@ from core.hal.base import BaseHardwareDevice
 class UltrasonicSensorArray(BaseHardwareDevice):
     """
     Manages 4 HC-SR04 ultrasonic sensors (front, rear, left, right).
-    Measures distances in centimeters with strict microsecond timeouts.
+    Measures distances in centimeters with microsecond timeouts and asymmetric safety filtering.
     """
 
     _FORWARD_PERIPHERALS = ("rear", "left", "right")
@@ -38,8 +39,12 @@ class UltrasonicSensorArray(BaseHardwareDevice):
         }
         # 3-Sample rolling median filter buffer for acoustic echo de-noising
         self._samples: Dict[str, list] = {
-            d: [100.0, 100.0, 100.0] for d in ("front", "rear", "left", "right")
+            d: [100.0, 100.0, 100.0] for d in self._ALL_DIRECTIONS
         }
+
+        self.backend = "mock"
+        self._lgpio = None
+        self._chip: Optional[int] = None
         self._gpio = None
         self._mock_step = 0
         self._lock = threading.Lock()
@@ -49,10 +54,38 @@ class UltrasonicSensorArray(BaseHardwareDevice):
             return True
 
         if self.is_mock:
+            self.backend = "mock"
             self.is_initialized = True
             print("[Ultrasonic] Initialized in SIMULATION / MOCK mode.")
             return True
 
+        # 1. Primary: lgpio
+        try:
+            import lgpio
+            for c in (0, 4):
+                try:
+                    self._chip = lgpio.gpiochip_open(c)
+                    break
+                except Exception:
+                    pass
+
+            if self._chip is not None:
+                self._lgpio = lgpio
+                for direction, cfg in self.pins.items():
+                    trig = cfg["trigger"]
+                    echo = cfg["echo"]
+                    lgpio.gpio_claim_output(self._chip, trig, 0)
+                    lgpio.gpio_claim_input(self._chip, echo)
+
+                self.backend = "lgpio"
+                self.is_initialized = True
+                self.last_error = None
+                print("[Ultrasonic] lgpio hardware array initialized.")
+                return True
+        except Exception as e:
+            print(f"[Ultrasonic] lgpio init bypassed ({e}); attempting RPi.GPIO fallback...")
+
+        # 2. Secondary Fallback: RPi.GPIO
         try:
             import RPi.GPIO as GPIO
             self._gpio = GPIO
@@ -66,14 +99,16 @@ class UltrasonicSensorArray(BaseHardwareDevice):
                 self._gpio.setup(echo, self._gpio.IN)
                 self._gpio.output(trig, self._gpio.LOW)
 
-            time.sleep(0.05)  # Allow sensors to settle
+            time.sleep(0.05)
+            self.backend = "rpi_gpio"
             self.is_initialized = True
             self.last_error = None
-            print("[Ultrasonic] Hardware HC-SR04 array initialized.")
+            print("[Ultrasonic] RPi.GPIO hardware array initialized.")
             return True
         except Exception as e:
             self.last_error = str(e)
             print(f"[Ultrasonic] Hardware init failed: {e}. Falling back to Mock.")
+            self.backend = "mock"
             self.is_mock = True
             self.is_initialized = True
             return True
@@ -87,8 +122,7 @@ class UltrasonicSensorArray(BaseHardwareDevice):
         if direction not in self.pins:
             return None
 
-        if self.is_mock or not self._gpio:
-            # Generate gentle mock values oscillating between 45cm and 150cm
+        if self.backend == "mock" or not self.is_initialized:
             self._mock_step += 0.05
             offset = {"front": 0.0, "rear": 1.5, "left": 3.0, "right": 4.5}.get(direction, 0)
             mock_dist = 85.0 + 35.0 * math.sin(self._mock_step + offset)
@@ -97,21 +131,29 @@ class UltrasonicSensorArray(BaseHardwareDevice):
                 self.distances[direction] = val
             return val
 
-        # Physical reading with strict safety timeout
         cfg = self.pins[direction]
         trig = cfg["trigger"]
         echo = cfg["echo"]
 
         try:
             # 10us trigger pulse
-            self._gpio.output(trig, self._gpio.HIGH)
-            time.sleep(0.00001)
-            self._gpio.output(trig, self._gpio.LOW)
+            if self.backend == "lgpio" and self._chip is not None and self._lgpio:
+                self._lgpio.gpio_write(self._chip, trig, 1)
+                time.sleep(0.00001)
+                self._lgpio.gpio_write(self._chip, trig, 0)
+                read_pin = lambda: self._lgpio.gpio_read(self._chip, echo)
+            elif self.backend == "rpi_gpio" and self._gpio:
+                self._gpio.output(trig, self._gpio.HIGH)
+                time.sleep(0.00001)
+                self._gpio.output(trig, self._gpio.LOW)
+                read_pin = lambda: self._gpio.input(echo)
+            else:
+                return None
 
             timeout_start = time.perf_counter()
             start_time = timeout_start
             # Wait for ECHO to go HIGH (fast 5ms timeout: sensor always starts within 0.5ms)
-            while self._gpio.input(echo) == 0:
+            while read_pin() == 0:
                 start_time = time.perf_counter()
                 if start_time - timeout_start > 0.005:
                     with self._lock:
@@ -121,7 +163,7 @@ class UltrasonicSensorArray(BaseHardwareDevice):
 
             stop_time = start_time
             # Wait for ECHO to go LOW (16ms timeout = ~274cm max range; beyond this is clear)
-            while self._gpio.input(echo) == 1:
+            while read_pin() == 1:
                 stop_time = time.perf_counter()
                 if stop_time - start_time > 0.016:
                     with self._lock:
@@ -129,7 +171,6 @@ class UltrasonicSensorArray(BaseHardwareDevice):
                         self.distances[direction] = None
                     return None
 
-            # Calculate distance: (elapsed * speed of sound 34300 cm/s) / 2
             elapsed = stop_time - start_time
             distance = (elapsed * 34300.0) / 2.0
             distance = round(distance, 1)
@@ -139,14 +180,12 @@ class UltrasonicSensorArray(BaseHardwareDevice):
                     prev_dist = self.distances.get(direction)
 
                     # ASYMMETRIC SAFETY FILTER:
-                    # When approaching an obstacle (distance decreasing), update IMMEDIATELY!
-                    # A median filter causes a 2-sample delay which leads to collisions at speed.
+                    # When approaching obstacle (distance decreasing), update IMMEDIATELY!
                     if prev_dist is None or distance < prev_dist:
                         filtered_dist = distance
                         self._samples[direction] = [distance, distance, distance]
                     else:
-                        # When distance is increasing (clearing obstacle), smooth with rolling median
-                        # to eliminate spurious single-sample multipath acoustic scatter
+                        # Smooth clearing transitions with 3-point rolling median
                         buf = self._samples.setdefault(direction, [distance, distance, distance])
                         buf.pop(0)
                         buf.append(distance)
@@ -157,6 +196,7 @@ class UltrasonicSensorArray(BaseHardwareDevice):
                 return filtered_dist
             else:
                 with self._lock:
+                    self.sensor_health[direction] = True
                     self.distances[direction] = None
                 return None
         except Exception:
@@ -171,7 +211,6 @@ class UltrasonicSensorArray(BaseHardwareDevice):
         - When moving forward: Reads 'front' at 2x rate, interleaving 1 peripheral sensor.
         - When moving backward: Reads 'rear' at 2x rate.
         - When idle or turning: Cycles through all 4 sensors.
-        Acoustic pulse dissipation pause reduced to 5ms for rapid 20-30Hz updates.
         """
         if motion_hint == "forward":
             self.read_distance("front")
@@ -201,23 +240,39 @@ class UltrasonicSensorArray(BaseHardwareDevice):
 
     def cleanup(self) -> None:
         """Releases GPIO pins."""
-        if not self.is_mock and self._gpio:
-            try:
-                pins = []
-                for cfg in self.pins.values():
-                    pins.extend([cfg["trigger"], cfg["echo"]])
-                self._gpio.cleanup(pins)
-            except Exception as e:
-                print(f"[Ultrasonic] Cleanup warning: {e}")
-        self.is_initialized = False
-        print("[Ultrasonic] Hardware pins released.")
+        with self._lock:
+            if self.backend == "lgpio" and self._chip is not None and self._lgpio:
+                try:
+                    for cfg in self.pins.values():
+                        try:
+                            self._lgpio.gpio_free(self._chip, cfg["trigger"])
+                            self._lgpio.gpio_free(self._chip, cfg["echo"])
+                        except Exception:
+                            pass
+                    self._lgpio.gpiochip_close(self._chip)
+                except Exception as e:
+                    print(f"[Ultrasonic] lgpio cleanup warning: {e}")
+                self._chip = None
+
+            if self.backend == "rpi_gpio" and self._gpio:
+                try:
+                    pins = []
+                    for cfg in self.pins.values():
+                        pins.extend([cfg["trigger"], cfg["echo"]])
+                    self._gpio.cleanup(pins)
+                except Exception as e:
+                    print(f"[Ultrasonic] RPi.GPIO cleanup warning: {e}")
+
+            self.is_initialized = False
 
     def get_status(self) -> Dict[str, Any]:
-        return {
-            "name": self.name,
-            "initialized": self.is_initialized,
-            "mock": self.is_mock,
-            "distances": self.distances,
-            "health": self.sensor_health,
-            "error": self.last_error,
-        }
+        with self._lock:
+            return {
+                "name": self.name,
+                "initialized": self.is_initialized,
+                "mock": self.is_mock,
+                "backend": self.backend,
+                "distances": self.distances.copy(),
+                "health": self.sensor_health.copy(),
+                "error": self.last_error,
+            }

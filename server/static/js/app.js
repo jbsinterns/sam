@@ -674,6 +674,19 @@ document.addEventListener('DOMContentLoaded', () => {
         videoRetryDelay = Math.min(videoRetryDelay * 1.5, 4000);
       }, videoRetryDelay);
     });
+
+    // Automatic tab visibility power & network saving (free Pi 4 CPU & Wi-Fi airtime when tab is minimized)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (cameraStreamImg) {
+          cameraStreamImg.src = '';
+        }
+      } else {
+        if (cameraStreamImg && cameraEnabled) {
+          reloadVideoStream();
+        }
+      }
+    });
   }
 
   toggleCameraBtns.forEach(btn => {

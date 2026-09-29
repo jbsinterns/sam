@@ -28,6 +28,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "left": {"ena": 17, "in1": 22, "in2": 27},
             "right": {"enb": 18, "in3": 23, "in4": 24},
             "pwm_frequency": 100,
+            "min_duty_cycle": 10.0,
+            "slew_rate_step": 12.0,
         },
         "ultrasonic": {
             "front": {"trigger": 10, "echo": 9},
@@ -49,7 +51,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "safety": {
         "watchdog_timeout_sec": 0.50,
-        "obstacle_warning_cm": 38.0,
+        "obstacle_warning_cm": 45.0,
         "obstacle_critical_stop_cm": 15.0,
         "idle_hardware_release_sec": 60.0,
     },

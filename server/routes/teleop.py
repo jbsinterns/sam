@@ -23,7 +23,7 @@ async def websocket_teleop_endpoint(websocket: WebSocket):
 
 
     async def telemetry_broadcaster():
-        """Pushes telemetry every 100ms."""
+        """Pushes telemetry at 20Hz (every 50ms) for smooth HUD & IMU motion reflection."""
         try:
             while True:
                 telemetry = hw_manager.get_telemetry()
@@ -31,7 +31,7 @@ async def websocket_teleop_endpoint(websocket: WebSocket):
                     "type": "telemetry",
                     "data": telemetry,
                 }))
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.05)
         except asyncio.CancelledError:
             pass
         except Exception:
