@@ -25,22 +25,23 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "gpio": {
         "motors": {
-            "left": {"ena": 12, "in1": 5, "in2": 6},
-            "right": {"enb": 13, "in3": 19, "in4": 26},
-            "pwm_frequency": 1000,
+            "left": {"ena": 17, "in1": 22, "in2": 27},
+            "right": {"enb": 18, "in3": 23, "in4": 24},
+            "pwm_frequency": 100,
         },
         "ultrasonic": {
-            "front": {"trigger": 23, "echo": 24},
-            "rear": {"trigger": 27, "echo": 22},
-            "left": {"trigger": 17, "echo": 18},
-            "right": {"trigger": 25, "echo": 8},
+            "front": {"trigger": 10, "echo": 9},
+            "rear": {"trigger": 11, "echo": 5},
+            "left": {"trigger": 6, "echo": 13},
+            "right": {"trigger": 19, "echo": 26},
         },
         "leds": {
-            "front": 4,
-            "rear": 14,
-            "left": 15,
-            "right": 16,
+            "front": 12,
+            "rear": 16,
+            "left": 20,
+            "right": 21,
         },
+        "buzzer": 25,
         "imu": {
             "bus": 1,
             "addresses": [0x68, 0x69],
@@ -48,7 +49,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "safety": {
         "watchdog_timeout_sec": 0.50,
-        "obstacle_warning_cm": 30.0,
+        "obstacle_warning_cm": 38.0,
         "obstacle_critical_stop_cm": 15.0,
         "idle_hardware_release_sec": 60.0,
     },

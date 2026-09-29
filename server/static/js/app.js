@@ -301,11 +301,22 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         const normAng = Math.max(-1.0, Math.min(1.0, ang / 100.0));
         const curvedAng = (0.3 * (normAng ** 3) + 0.7 * normAng) * 100.0;
-        let left = lin + curvedAng;
-        let right = lin - curvedAng;
-        const maxMag = Math.max(Math.abs(left), Math.abs(right), 100.0);
-        left = Math.round((left / maxMag) * 100.0);
-        right = Math.round((right / maxMag) * 100.0);
+        let left, right;
+        if (Math.abs(lin) >= 1.0) {
+          const turnRatio = curvedAng / 100.0;
+          if (turnRatio > 0) {
+            left = lin;
+            right = lin * (1.0 - 2.0 * turnRatio);
+          } else {
+            left = lin * (1.0 + 2.0 * turnRatio);
+            right = lin;
+          }
+        } else {
+          left = curvedAng;
+          right = -curvedAng;
+        }
+        left = Math.round(Math.max(-100, Math.min(100, left)));
+        right = Math.round(Math.max(-100, Math.min(100, right)));
         hudMotors.textContent = `L:${left}% R:${right}%`;
       }
     }
@@ -475,7 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (dist <= 15.0) {
             valEl.classList.add('alert');
             barEl.style.backgroundColor = 'var(--accent-red)';
-          } else if (dist <= 30.0) {
+          } else if (dist <= 38.0) {
             valEl.classList.add('warn');
             barEl.style.backgroundColor = 'var(--accent-amber)';
           } else {
@@ -511,7 +522,7 @@ document.addEventListener('DOMContentLoaded', () => {
           arc.setAttribute('fill', 'rgba(51, 65, 85, 0.25)');
         } else if (dist <= 15.0) {
           arc.setAttribute('fill', 'rgba(239, 68, 68, 0.85)');
-        } else if (dist <= 30.0) {
+        } else if (dist <= 38.0) {
           arc.setAttribute('fill', 'rgba(245, 158, 11, 0.85)');
         } else {
           arc.setAttribute('fill', 'rgba(16, 185, 129, 0.55)');
@@ -566,8 +577,8 @@ document.addEventListener('DOMContentLoaded', () => {
       logBuffer.push({
         timestamp: new Date().toISOString(),
         action: currentAction,
-        cmd_linear: (lastLinearCmd * 100).toFixed(1),
-        cmd_angular: (lastAngularCmd * 100).toFixed(1),
+        cmd_linear: lastLinearCmd.toFixed(1),
+        cmd_angular: lastAngularCmd.toFixed(1),
         tx_packets: txPackets,
         rx_packets: rxPackets,
         motor_left: data.motors ? Math.round(data.motors.left_speed || 0) : 0,
@@ -1005,6 +1016,60 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     scanWifiNetworks();
+    checkHotspotStatus();
+  }
+
+  const hotspotBadge = document.getElementById('hotspot-badge');
+  const btnToggleHotspot = document.getElementById('btn-toggle-hotspot');
+  const hotspotMsg = document.getElementById('hotspot-msg');
+  let isHotspotActive = false;
+
+  async function checkHotspotStatus() {
+    if (!hotspotBadge) return;
+    try {
+      const res = await fetch('/api/network/hotspot/status');
+      const data = await res.json();
+      isHotspotActive = !!data.active;
+      if (isHotspotActive) {
+        hotspotBadge.textContent = 'ACTIVE (192.168.4.1)';
+        hotspotBadge.style.background = 'rgba(16, 185, 129, 0.2)';
+        hotspotBadge.style.color = 'var(--accent-green)';
+        hotspotBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+        btnToggleHotspot.textContent = 'Stop AP';
+        btnToggleHotspot.className = 'btn btn-sm btn-danger';
+      } else {
+        hotspotBadge.textContent = 'OFFLINE';
+        hotspotBadge.style.background = 'rgba(255, 255, 255, 0.05)';
+        hotspotBadge.style.color = 'var(--text-muted)';
+        hotspotBadge.style.borderColor = 'var(--border-color)';
+        btnToggleHotspot.textContent = 'Start AP';
+        btnToggleHotspot.className = 'btn btn-sm btn-outline';
+      }
+    } catch (e) {
+      hotspotBadge.textContent = 'UNKNOWN';
+    }
+  }
+
+  if (btnToggleHotspot) {
+    btnToggleHotspot.addEventListener('click', async () => {
+      btnToggleHotspot.disabled = true;
+      hotspotMsg.textContent = isHotspotActive ? 'Stopping AP Hotspot...' : 'Starting AP Hotspot (SAM-Rover-Setup)...';
+      hotspotMsg.style.color = 'var(--accent-cyan)';
+      const endpoint = isHotspotActive ? '/api/network/hotspot/stop' : '/api/network/hotspot/start';
+      try {
+        const res = await fetch(endpoint, { method: 'POST' });
+        const data = await res.json();
+        hotspotMsg.textContent = data.message;
+        hotspotMsg.style.color = data.success ? 'var(--accent-green)' : 'var(--accent-red)';
+        await checkHotspotStatus();
+        setTimeout(loadNetworkInfo, 2000);
+      } catch (e) {
+        hotspotMsg.textContent = 'Hotspot toggle failed: Network error';
+        hotspotMsg.style.color = 'var(--accent-red)';
+      } finally {
+        btnToggleHotspot.disabled = false;
+      }
+    });
   }
 
   async function scanWifiNetworks() {
@@ -1101,7 +1166,7 @@ document.addEventListener('DOMContentLoaded', () => {
     controls: controls,
     getMotors: () => ({ enabled: motorsEnabled }),
     printStatus: () => {
-      console.log(`[SAM TELEMETRY DEBUG] Linear: ${(lastLinearCmd * 100).toFixed(1)}% | Angular: ${(lastAngularCmd * 100).toFixed(1)}% | Action: ${currentAction} | TX: ${txPackets} | RX: ${rxPackets}`);
+      console.log(`[SAM TELEMETRY DEBUG] Linear: ${lastLinearCmd.toFixed(1)}% | Angular: ${lastAngularCmd.toFixed(1)}% | Action: ${currentAction} | TX: ${txPackets} | RX: ${rxPackets}`);
     }
   };
 

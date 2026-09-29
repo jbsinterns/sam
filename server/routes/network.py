@@ -32,3 +32,22 @@ def connect_wifi(payload: WifiConnectPayload):
     """Initiates connection to a target Wi-Fi network."""
     result = hw_manager.network.connect_wifi(payload.ssid, payload.password)
     return result
+
+
+@router.get("/hotspot/status")
+def get_hotspot_status():
+    """Returns current status of the AP Hotspot."""
+    return hw_manager.network.get_hotspot_status()
+
+
+@router.post("/hotspot/start")
+def start_hotspot():
+    """Starts the SAM Rescue AP Hotspot."""
+    return hw_manager.network.start_hotspot()
+
+
+@router.post("/hotspot/stop")
+def stop_hotspot():
+    """Stops the SAM Rescue AP Hotspot."""
+    return hw_manager.network.stop_hotspot()
+

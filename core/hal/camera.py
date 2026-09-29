@@ -9,9 +9,15 @@ import platform
 import threading
 from typing import Dict, Any, Optional
 
+import os
 try:
+    os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
     import cv2
     import numpy as np
+    try:
+        cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+    except Exception:
+        pass
     HAS_CV2 = True
 except ImportError:
     cv2 = None
@@ -266,7 +272,9 @@ class CameraManager:
                     self.last_raw_frame = raw_frame
                     self.last_frame_time = time.time()
 
-                time.sleep(1.0 / self.fps)
+                # Pace synthetic fallback frames; physical cap.read() paces itself via V4L2 hardware clock
+                if self.cap is None or not self.cap.isOpened():
+                    time.sleep(1.0 / self.fps)
         finally:
             self._release_camera()
 

@@ -5,10 +5,11 @@ After=network.target network-online.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/home/ubuntu/raspberry/sam
-ExecStart=/usr/bin/python3 -m uvicorn server.app:app --host 0.0.0.0 --port 8000
+WorkingDirectory=/home/sam3/sam
+ExecStart=/home/sam3/sam/.venv/bin/python -m uvicorn server.app:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=3
+TimeoutStopSec=2s
 Environment=PYTHONUNBUFFERED=1
 
 [Install]

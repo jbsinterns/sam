@@ -16,9 +16,14 @@ class UltrasonicSensorArray(BaseHardwareDevice):
     Measures distances in centimeters with strict microsecond timeouts.
     """
 
+    _FORWARD_PERIPHERALS = ("rear", "left", "right")
+    _REVERSE_PERIPHERALS = ("front", "left", "right")
+    _ALL_DIRECTIONS = ("front", "rear", "left", "right")
+
     def __init__(self, pin_config: Dict[str, Any], is_mock: bool = False):
         super().__init__("UltrasonicArray", is_mock)
         self.pins = pin_config
+        self._peripheral_idx = 0
         self.distances: Dict[str, Optional[float]] = {
             "front": 100.0,
             "rear": 100.0,
@@ -98,27 +103,27 @@ class UltrasonicSensorArray(BaseHardwareDevice):
         echo = cfg["echo"]
 
         try:
-            # 10us pulse to trigger
+            # 10us trigger pulse
             self._gpio.output(trig, self._gpio.HIGH)
             time.sleep(0.00001)
             self._gpio.output(trig, self._gpio.LOW)
 
-            timeout_start = time.time()
+            timeout_start = time.perf_counter()
             start_time = timeout_start
-            # Wait for ECHO to go HIGH (max 30ms timeout)
+            # Wait for ECHO to go HIGH (fast 5ms timeout: sensor always starts within 0.5ms)
             while self._gpio.input(echo) == 0:
-                start_time = time.time()
-                if start_time - timeout_start > 0.03:
+                start_time = time.perf_counter()
+                if start_time - timeout_start > 0.005:
                     with self._lock:
                         self.sensor_health[direction] = False
                         self.distances[direction] = None
                     return None
 
             stop_time = start_time
-            # Wait for ECHO to go LOW (max 30ms timeout ~ 5 meters)
+            # Wait for ECHO to go LOW (16ms timeout = ~274cm max range; beyond this is clear)
             while self._gpio.input(echo) == 1:
-                stop_time = time.time()
-                if stop_time - start_time > 0.03:
+                stop_time = time.perf_counter()
+                if stop_time - start_time > 0.016:
                     with self._lock:
                         self.sensor_health[direction] = False
                         self.distances[direction] = None
@@ -129,16 +134,23 @@ class UltrasonicSensorArray(BaseHardwareDevice):
             distance = (elapsed * 34300.0) / 2.0
             distance = round(distance, 1)
 
-            if 2.0 <= distance <= 450.0:
-                # 3-Sample rolling median filter: eliminates phantom acoustic echoes
+            if 2.0 <= distance <= 350.0:
                 with self._lock:
-                    if direction in self._samples:
-                        buf = self._samples[direction]
+                    prev_dist = self.distances.get(direction)
+
+                    # ASYMMETRIC SAFETY FILTER:
+                    # When approaching an obstacle (distance decreasing), update IMMEDIATELY!
+                    # A median filter causes a 2-sample delay which leads to collisions at speed.
+                    if prev_dist is None or distance < prev_dist:
+                        filtered_dist = distance
+                        self._samples[direction] = [distance, distance, distance]
+                    else:
+                        # When distance is increasing (clearing obstacle), smooth with rolling median
+                        # to eliminate spurious single-sample multipath acoustic scatter
+                        buf = self._samples.setdefault(direction, [distance, distance, distance])
                         buf.pop(0)
                         buf.append(distance)
                         filtered_dist = round(sorted(buf)[1], 1)
-                    else:
-                        filtered_dist = distance
 
                     self.distances[direction] = filtered_dist
                     self.sensor_health[direction] = True
@@ -153,16 +165,39 @@ class UltrasonicSensorArray(BaseHardwareDevice):
                 self.distances[direction] = None
             return None
 
-    def read_all(self) -> Dict[str, Optional[float]]:
+    def read_cycle(self, motion_hint: Optional[str] = None) -> Dict[str, Optional[float]]:
         """
-        Reads all 4 sensors sequentially with 15ms acoustic settling delay
-        to eliminate reverberation cross-talk between sensors.
+        Smart motion-prioritized sensor scanning:
+        - When moving forward: Reads 'front' at 2x rate, interleaving 1 peripheral sensor.
+        - When moving backward: Reads 'rear' at 2x rate.
+        - When idle or turning: Cycles through all 4 sensors.
+        Acoustic pulse dissipation pause reduced to 5ms for rapid 20-30Hz updates.
         """
-        for direction in ("front", "rear", "left", "right"):
-            self.read_distance(direction)
-            time.sleep(0.015)  # Acoustic pulse dissipation pause
+        if motion_hint == "forward":
+            self.read_distance("front")
+            time.sleep(0.005)
+            self._peripheral_idx = (self._peripheral_idx + 1) % len(self._FORWARD_PERIPHERALS)
+            self.read_distance(self._FORWARD_PERIPHERALS[self._peripheral_idx])
+            time.sleep(0.005)
+            self.read_distance("front")
+        elif motion_hint == "reverse":
+            self.read_distance("rear")
+            time.sleep(0.005)
+            self._peripheral_idx = (self._peripheral_idx + 1) % len(self._REVERSE_PERIPHERALS)
+            self.read_distance(self._REVERSE_PERIPHERALS[self._peripheral_idx])
+            time.sleep(0.005)
+            self.read_distance("rear")
+        else:
+            for direction in self._ALL_DIRECTIONS:
+                self.read_distance(direction)
+                time.sleep(0.005)
+
         with self._lock:
             return self.distances.copy()
+
+    def read_all(self) -> Dict[str, Optional[float]]:
+        """Reads all sensors, delegating to read_cycle."""
+        return self.read_cycle()
 
     def cleanup(self) -> None:
         """Releases GPIO pins."""

@@ -13,23 +13,19 @@ router = APIRouter(prefix="/api/video", tags=["Video"])
 
 
 async def generate_frames():
-    """Asynchronous generator yielding multipart JPEG frames with zero thread-pool overhead."""
-    fps = hw_manager.camera.fps or 25
-    frame_interval = 1.0 / fps
+    """Asynchronous generator yielding multipart JPEG frames with low latency and zero duplicate transmissions."""
+    last_frame_sent = None
 
     try:
         while hw_manager._is_running:
-            start_time = time.time()
             frame = hw_manager.camera.get_latest_frame()
-
-            yield (
-                b"--frame\r\n"
-                b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
-            )
-
-            elapsed = time.time() - start_time
-            sleep_time = max(0.005, frame_interval - elapsed)
-            await asyncio.sleep(sleep_time)
+            if frame is not last_frame_sent:
+                last_frame_sent = frame
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
+                )
+            await asyncio.sleep(0.02)
     except (asyncio.CancelledError, GeneratorExit, BrokenPipeError, ConnectionResetError):
         pass
     except Exception:

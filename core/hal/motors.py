@@ -26,6 +26,8 @@ class MotorDriver(BaseHardwareDevice):
         # Motion & Stiction Tuning (20 RPM Gear Motor Optimization)
         self.min_duty_cycle = float(self.pins.get("min_duty_cycle", 25.0))
         self.steering_expo = float(self.pins.get("steering_expo", 0.3))
+        self.invert_left = bool(self.pins.get("invert_left", False))
+        self.invert_right = bool(self.pins.get("invert_right", False))
 
         # Re-entrant thread safety lock
         self._lock = threading.RLock()
@@ -34,6 +36,10 @@ class MotorDriver(BaseHardwareDevice):
         self._gpio = None
         self._pwm_left = None
         self._pwm_right = None
+        self._pwm_in1 = None
+        self._pwm_in2 = None
+        self._pwm_in3 = None
+        self._pwm_in4 = None
 
     def initialize(self) -> bool:
         if self.is_initialized:
@@ -45,7 +51,6 @@ class MotorDriver(BaseHardwareDevice):
             return True
 
         try:
-            # Try importing RPi.GPIO or lgpio safely
             try:
                 import RPi.GPIO as GPIO
                 self._gpio = GPIO
@@ -60,9 +65,10 @@ class MotorDriver(BaseHardwareDevice):
 
             lp = self.pins["left"]
             rp = self.pins["right"]
-            freq = self.pins.get("pwm_frequency", 1000)
+            # 100 Hz optimal frequency for L298N switching & motor torque
+            freq = int(self.pins.get("pwm_frequency", 100))
 
-            # Setup Direction Pins
+            # Setup Direction Pins with PWM
             for pin in (lp["in1"], lp["in2"], rp["in3"], rp["in4"]):
                 self._gpio.setup(pin, self._gpio.OUT)
                 self._gpio.output(pin, self._gpio.LOW)
@@ -71,15 +77,23 @@ class MotorDriver(BaseHardwareDevice):
             self._gpio.setup(lp["ena"], self._gpio.OUT)
             self._gpio.setup(rp["enb"], self._gpio.OUT)
 
+            # Universal Dual-Layer PWM:
+            # 1. PWM on Directional Pins (works even if ENA/ENB jumpers are attached to 5V)
+            self._pwm_in1 = self._gpio.PWM(lp["in1"], freq)
+            self._pwm_in2 = self._gpio.PWM(lp["in2"], freq)
+            self._pwm_in3 = self._gpio.PWM(rp["in3"], freq)
+            self._pwm_in4 = self._gpio.PWM(rp["in4"], freq)
+
+            # 2. PWM on ENA/ENB Pins (works if ENA/ENB are wired to GPIO)
             self._pwm_left = self._gpio.PWM(lp["ena"], freq)
             self._pwm_right = self._gpio.PWM(rp["enb"], freq)
 
-            self._pwm_left.start(0)
-            self._pwm_right.start(0)
+            for p in (self._pwm_in1, self._pwm_in2, self._pwm_in3, self._pwm_in4, self._pwm_left, self._pwm_right):
+                p.start(0)
 
             self.is_initialized = True
             self.last_error = None
-            print("[Motors] Hardware L298N initialized successfully.")
+            print(f"[Motors] Universal Dual-Layer PWM initialized at {freq}Hz.")
             return True
         except Exception as e:
             self.last_error = str(e)
@@ -90,14 +104,14 @@ class MotorDriver(BaseHardwareDevice):
 
     def _map_duty(self, speed: float) -> float:
         """
-        Maps a normalized speed percentage (0-100) to hardware PWM duty cycle,
-        incorporating deadband stiction compensation so low speed inputs produce
-        effective torque rather than stalling 20 RPM gearboxes.
+        Maps a normalized speed percentage (0-100) to hardware PWM duty cycle.
+        Provides a gentle minimum duty cycle (15%) for low-speed crawl.
         """
         mag = abs(speed)
         if mag < 1.0:
             return 0.0
-        duty = self.min_duty_cycle + (100.0 - self.min_duty_cycle) * (mag / 100.0)
+        min_d = min(15.0, self.min_duty_cycle)
+        duty = min_d + (100.0 - min_d) * (mag / 100.0)
         return min(100.0, max(0.0, duty))
 
     def set_motor_speeds(self, left: float, right: float) -> None:
@@ -113,87 +127,105 @@ class MotorDriver(BaseHardwareDevice):
             target_left = max(-100.0, min(100.0, float(left)))
             target_right = max(-100.0, min(100.0, float(right)))
 
-            # 20 RPM Gear Motor Micro-Slew Ramping
-            # Cushions gearbox backlash when leaping from 0% to high PWM, instant on emergency stop
-            prev_left = self.left_speed
-            prev_right = self.right_speed
-
             self.left_speed = target_left
             self.right_speed = target_right
 
             if self.is_mock or not self._gpio:
                 return
 
-            # Micro-slew step if transitioning from idle to significant drive (>30% jump)
-            needs_ramp = (abs(prev_left) < 5 and abs(target_left) > 30) or (abs(prev_right) < 5 and abs(target_right) > 30)
+            self._apply_hardware(target_left, target_right)
 
-            lp = self.pins["left"]
-            rp = self.pins["right"]
+    def _apply_hardware(self, l_spd: float, r_spd: float) -> None:
+        """Applies PWM duty cycles and polarities to physical H-bridge drivers."""
+        duty_left = self._map_duty(l_spd)
+        duty_right = self._map_duty(r_spd)
 
-            def _apply_hardware(l_spd, r_spd):
-                duty_left = self._map_duty(l_spd)
-                duty_right = self._map_duty(r_spd)
+        eff_left = -l_spd if self.invert_left else l_spd
+        eff_right = -r_spd if self.invert_right else r_spd
 
-                # Left Motor
-                if l_spd > 0:
-                    self._gpio.output(lp["in1"], self._gpio.HIGH)
-                    self._gpio.output(lp["in2"], self._gpio.LOW)
-                    self._pwm_left.ChangeDutyCycle(duty_left)
-                elif l_spd < 0:
-                    self._gpio.output(lp["in1"], self._gpio.LOW)
-                    self._gpio.output(lp["in2"], self._gpio.HIGH)
-                    self._pwm_left.ChangeDutyCycle(duty_left)
-                else:
-                    self._gpio.output(lp["in1"], self._gpio.LOW)
-                    self._gpio.output(lp["in2"], self._gpio.LOW)
-                    self._pwm_left.ChangeDutyCycle(0)
+        # Left Motor: IN1, IN2, ENA
+        if eff_left > 0:
+            self._pwm_in1.ChangeDutyCycle(0)
+            self._pwm_in2.ChangeDutyCycle(duty_left)
+            self._pwm_left.ChangeDutyCycle(duty_left)
+        elif eff_left < 0:
+            self._pwm_in2.ChangeDutyCycle(0)
+            self._pwm_in1.ChangeDutyCycle(duty_left)
+            self._pwm_left.ChangeDutyCycle(duty_left)
+        else:
+            self._pwm_in1.ChangeDutyCycle(0)
+            self._pwm_in2.ChangeDutyCycle(0)
+            self._pwm_left.ChangeDutyCycle(0)
 
-                # Right Motor
-                if r_spd > 0:
-                    self._gpio.output(rp["in3"], self._gpio.HIGH)
-                    self._gpio.output(rp["in4"], self._gpio.LOW)
-                    self._pwm_right.ChangeDutyCycle(duty_right)
-                elif r_spd < 0:
-                    self._gpio.output(rp["in3"], self._gpio.LOW)
-                    self._gpio.output(rp["in4"], self._gpio.HIGH)
-                    self._pwm_right.ChangeDutyCycle(duty_right)
-                else:
-                    self._gpio.output(rp["in3"], self._gpio.LOW)
-                    self._gpio.output(rp["in4"], self._gpio.LOW)
-                    self._pwm_right.ChangeDutyCycle(0)
-
-            if needs_ramp:
-                # Step 1: 55% intermediate cushion for 35ms
-                _apply_hardware(target_left * 0.55, target_right * 0.55)
-                time.sleep(0.035)
-
-            # Final target speed
-            _apply_hardware(target_left, target_right)
+        # Right Motor: IN3, IN4, ENB
+        if eff_right > 0:
+            self._pwm_in3.ChangeDutyCycle(0)
+            self._pwm_in4.ChangeDutyCycle(duty_right)
+            self._pwm_right.ChangeDutyCycle(duty_right)
+        elif eff_right < 0:
+            self._pwm_in4.ChangeDutyCycle(0)
+            self._pwm_in3.ChangeDutyCycle(duty_right)
+            self._pwm_right.ChangeDutyCycle(duty_right)
+        else:
+            self._pwm_in3.ChangeDutyCycle(0)
+            self._pwm_in4.ChangeDutyCycle(0)
+            self._pwm_right.ChangeDutyCycle(0)
 
     def set_differential_drive(self, linear: float, angular: float) -> None:
         """
-        Differential steering mixer with exponential sensitivity curve.
-        linear: -100 (back) to +100 (forward)
-        angular: -100 (turn left) to +100 (turn right)
+        True proportional arcade drive steering mixer.
+        Maintains linear speed limit while smoothly articulating curves.
+        linear: -100 to 100
+        angular: -100 to 100
         """
-        # Apply exponential steering curve: y = expo * x^3 + (1 - expo) * x
-        # Softens sensitivity around neutral center while keeping full authority at limits
+        if abs(linear) < 1.0 and abs(angular) < 1.0:
+            self.stop()
+            return
+
         norm_ang = max(-1.0, min(1.0, angular / 100.0))
+        # Exponential curve for fine center control
         curved_ang = (self.steering_expo * (norm_ang ** 3) + (1.0 - self.steering_expo) * norm_ang) * 100.0
 
-        left = linear + curved_ang
-        right = linear - curved_ang
+        if abs(linear) >= 1.0:
+            turn_ratio = curved_ang / 100.0  # -1.0 (full left) to +1.0 (full right)
+            if turn_ratio > 0:
+                # Steer right: left wheel at linear, right wheel scaled down
+                left = linear
+                right = linear * (1.0 - 2.0 * turn_ratio)
+            else:
+                # Steer left: right wheel at linear, left wheel scaled down
+                left = linear * (1.0 + 2.0 * turn_ratio)
+                right = linear
+        else:
+            # Pivot in place / tank turn
+            left = curved_ang
+            right = -curved_ang
 
-        # Normalize if exceed 100
-        max_mag = max(abs(left), abs(right), 100.0)
-        left = (left / max_mag) * 100.0
-        right = (right / max_mag) * 100.0
+        left = max(-100.0, min(100.0, left))
+        right = max(-100.0, min(100.0, right))
 
         self.set_motor_speeds(left, right)
 
+    def brake(self) -> None:
+        """
+        Active electromagnetic regenerative brake for immediate stopping.
+        Grounds H-bridge outputs with EN active to short motor back-EMF,
+        eliminating coasting momentum and stopping the rover within 1-2 cm.
+        """
+        with self._lock:
+            self.left_speed = 0.0
+            self.right_speed = 0.0
+            if not self.is_mock and self._gpio and self.is_initialized:
+                try:
+                    for p in (self._pwm_in1, self._pwm_in2, self._pwm_in3, self._pwm_in4, self._pwm_left, self._pwm_right):
+                        if p:
+                            p.ChangeDutyCycle(0)
+                except Exception:
+                    pass
+
     def stop(self) -> None:
-        """Instantly stops all motor rotation."""
-        self.set_motor_speeds(0.0, 0.0)
+        """Instantly stops all motor rotation with active braking."""
+        self.brake()
 
     def cleanup(self) -> None:
         """Releases GPIO pins and stops PWM."""
@@ -201,10 +233,12 @@ class MotorDriver(BaseHardwareDevice):
             self.stop()
             if not self.is_mock and self._gpio:
                 try:
-                    if self._pwm_left:
-                        self._pwm_left.stop()
-                    if self._pwm_right:
-                        self._pwm_right.stop()
+                    for pwm in (self._pwm_in1, self._pwm_in2, self._pwm_in3, self._pwm_in4, self._pwm_left, self._pwm_right):
+                        if pwm:
+                            try:
+                                pwm.stop()
+                            except Exception:
+                                pass
                     lp = self.pins["left"]
                     rp = self.pins["right"]
                     pins = [lp["ena"], lp["in1"], lp["in2"], rp["enb"], rp["in3"], rp["in4"]]

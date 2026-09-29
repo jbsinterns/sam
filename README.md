@@ -118,13 +118,14 @@ with SamRover() as rover:
 
 | Subsystem | Signal | Raspberry Pi Pin (BCM) | Physical Pin |
 | :--- | :--- | :--- | :--- |
-| **Left Motor** | ENA (PWM), IN1, IN2 | GPIO 12, 5, 6 | Pins 32, 29, 31 |
-| **Right Motor** | ENB (PWM), IN3, IN4 | GPIO 13, 19, 26 | Pins 33, 35, 37 |
-| **Front Ultrasonic** | TRIG, ECHO (via divider) | GPIO 23, 24 | Pins 16, 18 |
-| **Rear Ultrasonic** | TRIG, ECHO (via divider) | GPIO 27, 22 | Pins 13, 15 |
-| **Left Ultrasonic** | TRIG, ECHO (via divider) | GPIO 17, 18 | Pins 11, 12 |
-| **Right Ultrasonic** | TRIG, ECHO (via divider) | GPIO 25, 8 | Pins 22, 24 |
-| **Directional LEDs** | Front, Rear, Left, Right | GPIO 4, 14, 15, 16 | Pins 7, 8, 10, 36 |
+| **Left Motor** | ENA (PWM), IN1, IN2 | GPIO 17, 22, 27 | Pins 11, 15, 13 |
+| **Right Motor** | ENB (PWM), IN3, IN4 | GPIO 18, 23, 24 | Pins 12, 16, 18 |
+| **Front Ultrasonic** | TRIG, ECHO | GPIO 10, 9 | Pins 19, 21 |
+| **Rear Ultrasonic** | TRIG, ECHO | GPIO 11, 5 | Pins 23, 29 |
+| **Left Ultrasonic** | TRIG, ECHO | GPIO 6, 13 | Pins 31, 33 |
+| **Right Ultrasonic** | TRIG, ECHO | GPIO 19, 26 | Pins 35, 37 |
+| **Directional LEDs** | Front, Rear, Left, Right | GPIO 12, 16, 20, 21 | Pins 32, 36, 38, 40 |
+| **Buzzer** | Active Horn | GPIO 25 | Pin 22 |
 | **IMU (I2C)** | SDA, SCL | GPIO 2, 3 | Pins 3, 5 |
 | **Camera** | USB 2.0 / 3.0 | `/dev/video0` | USB Port |
 

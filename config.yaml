@@ -15,41 +15,42 @@ system:
 gpio:
   motors:
     left:
-      ena: 12   # PWM speed control
-      in1: 5    # Direction forward
-      in2: 6    # Direction backward
+      ena: 17   # PWM speed control
+      in1: 22   # Direction forward
+      in2: 27   # Direction backward
     right:
-      enb: 13   # PWM speed control
-      in3: 19   # Direction forward
-      in4: 26   # Direction backward
-    pwm_frequency: 1000
-    min_duty_cycle: 25.0  # Deadband stiction compensation: minimum PWM duty cycle for 20 RPM gearboxes
+      enb: 18   # PWM speed control
+      in3: 23   # Direction forward
+      in4: 24   # Direction backward
+    pwm_frequency: 100
+    min_duty_cycle: 15.0  # Deadband stiction compensation: minimum PWM duty cycle for 20 RPM gearboxes
     steering_expo: 0.3    # Exponential steering curve (0.0 = linear, 0.3 = smooth center)
+    invert_left: false    # Set to true if left motor spins opposite
+    invert_right: false   # Set to true if right motor spins opposite
 
   ultrasonic:
-    # 4-Directional HC-SR04 Sensors
-    # IMPORTANT: Ensure Echo pins use 1k/2k voltage dividers to protect Pi (3.3V)
+    # 4-Directional HC-SR04 Sensors (Trigger, Echo)
     front:
-      trigger: 23
-      echo: 24
+      trigger: 10
+      echo: 9
     rear:
-      trigger: 27
-      echo: 22
+      trigger: 11
+      echo: 5
     left:
-      trigger: 17
-      echo: 18
+      trigger: 6
+      echo: 13
     right:
-      trigger: 25
-      echo: 8
+      trigger: 19
+      echo: 26
 
   leds:
-    # 4 Directional Indicator LEDs (via 220-330 ohm resistors)
-    front: 4
-    rear: 14
-    left: 15
-    right: 16
+    # 4 Directional Indicator LEDs
+    front: 12
+    rear: 16
+    left: 20
+    right: 21
 
-  buzzer: 20  # Active piezo buzzer / horn pin (BCM)
+  buzzer: 25  # Active piezo buzzer / horn pin (BCM)
 
   imu:
     # Reserved I2C bus pins (GPIO 2 = SDA, GPIO 3 = SCL)
@@ -62,7 +63,7 @@ safety:
   watchdog_timeout_sec: 0.50
   
   # Distance threshold in cm for obstacle avoidance
-  obstacle_warning_cm: 35.0
+  obstacle_warning_cm: 38.0
   obstacle_critical_stop_cm: 15.0
 
   # Automatic GPIO release when web UI is inactive for this duration (seconds)

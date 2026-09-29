@@ -14,6 +14,25 @@ from core.hal.leds import LEDController
 from core.hal.buzzer import Buzzer
 from core.hal.camera import CameraManager
 from core.hal.network import NetworkManager
+from core.hal.imu import IMUDriver
+from core.logger import log_info, log_warn, log_error
+
+_metrics_increment_fn = None
+
+
+def _safe_increment_counter(key: str, count: int = 1) -> None:
+    """Thread-safe cached dispatch to Prometheus metrics counter."""
+    global _metrics_increment_fn
+    if _metrics_increment_fn is None:
+        try:
+            from server.routes.metrics import increment_counter
+            _metrics_increment_fn = increment_counter
+        except Exception:
+            return
+    try:
+        _metrics_increment_fn(key, count)
+    except Exception:
+        pass
 
 
 class HardwareManager:
@@ -30,9 +49,10 @@ class HardwareManager:
         self.motors = MotorDriver(self.cfg["gpio"]["motors"], is_mock=self.is_mock)
         self.ultrasonic = UltrasonicSensorArray(self.cfg["gpio"]["ultrasonic"], is_mock=self.is_mock)
         self.leds = LEDController(self.cfg["gpio"]["leds"], is_mock=self.is_mock)
-        self.buzzer = Buzzer(self.cfg["gpio"].get("buzzer", 20), is_mock=self.is_mock)
+        self.buzzer = Buzzer(self.cfg["gpio"].get("buzzer", 25), is_mock=self.is_mock)
         self.camera = CameraManager(self.cfg["camera"])
         self.network = NetworkManager()
+        self.imu = IMUDriver(self.cfg["gpio"].get("imu", {"bus": 1, "addresses": [0x68, 0x69]}), is_mock=self.is_mock)
 
         # Dynamic Lease & Control States
         self.is_hardware_leased = False
@@ -50,6 +70,16 @@ class HardwareManager:
         self.warning_stop_cm = self.cfg["safety"].get("obstacle_warning_cm", 35.0)
         self.critical_stop_cm = self.cfg["safety"].get("obstacle_critical_stop_cm", 15.0)
         self.speed_limit = 60
+
+        # Cached Pi Vitals (1.5s TTL to avoid high-frequency fork/exec of vcgencmd)
+        self._last_vitals: Dict[str, Any] = {
+            "cpu_temp": 45.0,
+            "cpu_load": 0.0,
+            "ram_usage": 0.0,
+            "throttled": False,
+            "undervoltage": False,
+        }
+        self._last_vitals_time = 0.0
 
         # Background Supervisors
         self._lease_lock = threading.RLock()
@@ -81,6 +111,7 @@ class HardwareManager:
                     self.ultrasonic.initialize()
                 self.leds.initialize()
                 self.buzzer.initialize()
+                self.imu.initialize()
                 self.camera.start()
                 self.is_hardware_leased = True
 
@@ -108,6 +139,7 @@ class HardwareManager:
                 self.ultrasonic.cleanup()
                 self.leds.cleanup()
                 self.buzzer.cleanup()
+                self.imu.cleanup()
                 self.camera.stop()
                 self.is_hardware_leased = False
                 self.active_operator_id = None
@@ -168,29 +200,27 @@ class HardwareManager:
             # 1. Forward checks
             if linear > 0 and front_dist is not None:
                 if front_dist <= self.critical_stop_cm:
-                    self.motors.stop()
-                    try:
-                        from server.routes.metrics import increment_counter
-                        increment_counter("obstacle_stops")
-                    except Exception:
-                        pass
-                    try:
-                        from core.logger import log_warn
-                        log_warn("safety.obstacle", "OBSTACLE_CRITICAL_STOP", direction="front", distance_cm=front_dist)
-                    except Exception:
-                        pass
+                    # Critical zone: block forward drive, but allow steering away (angular) or reverse
+                    if abs(angular) > 0.01:
+                        self.motors.set_differential_drive(0.0, angular)
+                    else:
+                        self.motors.stop()
+                    _safe_increment_counter("obstacle_stops")
+                    log_warn("safety.obstacle", "OBSTACLE_CRITICAL_STOP", direction="front", distance_cm=front_dist)
                     return {
                         "blocked": True,
                         "throttled": False,
                         "reason": f"Front obstacle too close ({front_dist}cm)",
                         "linear": 0.0,
-                        "angular": 0.0,
+                        "angular": angular,
                     }
                 elif front_dist < self.warning_stop_cm:
-                    # Progressive proportional deceleration: scale speed between 20% and 100%
+                    # Progressive smooth deceleration towards critical threshold
                     span = max(1.0, float(self.warning_stop_cm - self.critical_stop_cm))
                     ratio = max(0.0, min(1.0, (front_dist - self.critical_stop_cm) / span))
-                    speed_cap = max(20.0, ratio * 100.0)
+                    min_crawl = 22.0
+                    max_allowed = float(self.speed_limit)
+                    speed_cap = min_crawl + (ratio ** 1.3) * (max_allowed - min_crawl)
                     if linear > speed_cap:
                         linear = speed_cap
                         throttled = True
@@ -199,38 +229,31 @@ class HardwareManager:
             # 2. Reverse checks
             if linear < 0 and rear_dist is not None:
                 if rear_dist <= self.critical_stop_cm:
-                    self.motors.stop()
-                    try:
-                        from server.routes.metrics import increment_counter
-                        increment_counter("obstacle_stops")
-                    except Exception:
-                        pass
-                    try:
-                        from core.logger import log_warn
-                        log_warn("safety.obstacle", "OBSTACLE_CRITICAL_STOP", direction="rear", distance_cm=rear_dist)
-                    except Exception:
-                        pass
+                    if abs(angular) > 0.01:
+                        self.motors.set_differential_drive(0.0, angular)
+                    else:
+                        self.motors.stop()
+                    _safe_increment_counter("obstacle_stops")
+                    log_warn("safety.obstacle", "OBSTACLE_CRITICAL_STOP", direction="rear", distance_cm=rear_dist)
                     return {
                         "blocked": True,
                         "throttled": False,
                         "reason": f"Rear obstacle too close ({rear_dist}cm)",
                         "linear": 0.0,
-                        "angular": 0.0,
+                        "angular": angular,
                     }
                 elif rear_dist < self.warning_stop_cm:
                     span = max(1.0, float(self.warning_stop_cm - self.critical_stop_cm))
                     ratio = max(0.0, min(1.0, (rear_dist - self.critical_stop_cm) / span))
-                    speed_cap = max(20.0, ratio * 100.0)
+                    min_crawl = 22.0
+                    max_allowed = float(self.speed_limit)
+                    speed_cap = min_crawl + (ratio ** 1.3) * (max_allowed - min_crawl)
                     if abs(linear) > speed_cap:
                         linear = -speed_cap
                         throttled = True
                         throttled_reason = f"Proximity slowdown (Rear: {rear_dist}cm)"
 
-        try:
-            from server.routes.metrics import increment_counter
-            increment_counter("drive_commands")
-        except Exception:
-            pass
+        _safe_increment_counter("drive_commands")
 
         self.motors.set_differential_drive(linear, angular)
         return {
@@ -251,18 +274,72 @@ class HardwareManager:
             pass
 
     def _sensor_polling_loop(self) -> None:
-        """Continuously reads ultrasonic sensors if enabled and hardware leased."""
+        """
+        Continuously reads ultrasonic sensors and IMU.
+        Actively intervenes in real time if rover in motion approaches an obstacle:
+        - Dynamically decelerates motors in warning zone.
+        - Actively brakes and halts before critical collision zone.
+        """
         while self._is_running:
             if self.sensors_enabled and self.is_hardware_leased:
                 try:
-                    self.ultrasonic.read_all()
+                    curr_l = self.motors.left_speed
+                    curr_r = self.motors.right_speed
+
+                    # Determine motion hint for ultrasonic priority scanning
+                    motion_hint = None
+                    if curr_l > 5 or curr_r > 5:
+                        motion_hint = "forward"
+                    elif curr_l < -5 or curr_r < -5:
+                        motion_hint = "reverse"
+
+                    self.ultrasonic.read_cycle(motion_hint=motion_hint)
+                    self.imu.read_sensors()
+
+                    # REAL-TIME COLLISION PREVENTION WHILE ROVER IS IN MOTION:
+                    front_dist = self.ultrasonic.distances.get("front")
+                    rear_dist = self.ultrasonic.distances.get("rear")
+
+                    # 1. Forward motion safety check
+                    if (curr_l > 0 or curr_r > 0) and front_dist is not None:
+                        if front_dist <= self.critical_stop_cm:
+                            # CRITICAL OBSTACLE: Apply active electromagnetic brake immediately!
+                            self.motors.stop()
+                            _safe_increment_counter("obstacle_stops")
+                            log_warn("safety.obstacle", "ACTIVE_MOTION_CRITICAL_STOP", direction="front", distance_cm=front_dist)
+                        elif front_dist < self.warning_stop_cm:
+                            # PROXIMITY DECELERATION: Proactively slow down motors in real time
+                            span = max(1.0, float(self.warning_stop_cm - self.critical_stop_cm))
+                            ratio = max(0.0, min(1.0, (front_dist - self.critical_stop_cm) / span))
+                            min_crawl = 22.0
+                            max_allowed = float(self.speed_limit)
+                            speed_cap = min_crawl + (ratio ** 1.3) * (max_allowed - min_crawl)
+                            max_speed = max(curr_l, curr_r)
+                            if max_speed > speed_cap:
+                                scale = speed_cap / max_speed
+                                self.motors.set_motor_speeds(curr_l * scale, curr_r * scale)
+
+                    # 2. Reverse motion safety check
+                    elif (curr_l < 0 or curr_r < 0) and rear_dist is not None:
+                        if rear_dist <= self.critical_stop_cm:
+                            self.motors.stop()
+                            _safe_increment_counter("obstacle_stops")
+                            log_warn("safety.obstacle", "ACTIVE_MOTION_CRITICAL_STOP", direction="rear", distance_cm=rear_dist)
+                        elif rear_dist < self.warning_stop_cm:
+                            span = max(1.0, float(self.warning_stop_cm - self.critical_stop_cm))
+                            ratio = max(0.0, min(1.0, (rear_dist - self.critical_stop_cm) / span))
+                            min_crawl = 22.0
+                            max_allowed = float(self.speed_limit)
+                            speed_cap = min_crawl + (ratio ** 1.3) * (max_allowed - min_crawl)
+                            min_speed = min(curr_l, curr_r)
+                            if abs(min_speed) > speed_cap:
+                                scale = speed_cap / abs(min_speed)
+                                self.motors.set_motor_speeds(curr_l * scale, curr_r * scale)
+
                 except Exception as e:
-                    try:
-                        from core.logger import log_error
-                        log_error("hal.ultrasonic", "SENSOR_POLL_ERROR", error=str(e))
-                    except Exception:
-                        pass
-            time.sleep(0.1)
+                    log_error("hal.ultrasonic", "SENSOR_POLL_ERROR", error=str(e))
+
+            time.sleep(0.015)
 
     def _supervisor_loop(self) -> None:
         """
@@ -276,31 +353,23 @@ class HardwareManager:
                 if (abs(self.motors.left_speed) > 0 or abs(self.motors.right_speed) > 0):
                     if (now - self.last_heartbeat_time) > self.watchdog_timeout:
                         self.motors.stop()
-                        try:
-                            from server.routes.metrics import increment_counter
-                            increment_counter("watchdog_cuts")
-                        except Exception:
-                            pass
-                        try:
-                            from core.logger import log_warn
-                            delta_ms = round((now - self.last_heartbeat_time) * 1000, 1)
-                            log_warn("safety.watchdog", "WATCHDOG_TIMEOUT_CUT", delta_ms=delta_ms)
-                        except Exception:
-                            pass
+                        _safe_increment_counter("watchdog_cuts")
+                        delta_ms = round((now - self.last_heartbeat_time) * 1000, 1)
+                        log_warn("safety.watchdog", "WATCHDOG_TIMEOUT_CUT", delta_ms=delta_ms)
 
                 # 2. Idle Hardware Auto-Release (frees pins for students if browser is closed)
                 if (now - self.last_activity_time) > self.idle_release_timeout:
                     self.release_control(force=True)
-                    try:
-                        from core.logger import log_info
-                        log_info("safety.lease", "IDLE_AUTO_RELEASE_TRIGGERED")
-                    except Exception:
-                        pass
+                    log_info("safety.lease", "IDLE_AUTO_RELEASE_TRIGGERED")
 
             time.sleep(0.1)
 
     def get_pi_vitals(self) -> Dict[str, Any]:
-        """Reads Raspberry Pi vital statistics (temperature, load, memory, undervoltage)."""
+        """Reads Raspberry Pi vital statistics with 1.5s cache to minimize CPU overhead."""
+        now = time.time()
+        if (now - self._last_vitals_time) < 1.5:
+            return self._last_vitals.copy()
+
         vitals = {
             "cpu_temp": None,
             "cpu_load": 0.0,
@@ -335,6 +404,8 @@ class HardwareManager:
         except Exception:
             pass
 
+        self._last_vitals = vitals
+        self._last_vitals_time = now
         return vitals
 
     def get_telemetry(self) -> Dict[str, Any]:
@@ -354,6 +425,7 @@ class HardwareManager:
             "ultrasonic": self.ultrasonic.get_status(),
             "leds": self.leds.get_status(),
             "buzzer": self.buzzer.get_status(),
+            "imu": self.imu.get_status(),
             "vitals": self.get_pi_vitals(),
             "camera": self.camera.get_status(),
             "system_time": time.time(),

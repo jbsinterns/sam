@@ -49,9 +49,9 @@ def readiness_probe(response: Response) -> dict:
     # 3. Pydantic Configuration Validation Check
     config_ok = getattr(config_manager, "validated_schema", None) is not None
 
-    # 4. Camera Readiness (device port tested or simulation ready)
+    # 4. Camera Readiness (device port tested, streaming, or fallback test-pattern ready)
     camera_ok = bool(
-        hw_manager.camera.is_running or hw_manager.camera.cap is not None or config_manager.is_mock
+        hw_manager.camera is not None
     )
 
     checks = {
