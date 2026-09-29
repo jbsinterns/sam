@@ -97,7 +97,7 @@ class GPIOConfig(BaseModel):
 
 class SafetyConfig(BaseModel):
     watchdog_timeout_sec: float = Field(default=0.5, ge=0.05, le=10.0)
-    obstacle_warning_cm: float = Field(default=45.0, ge=5.0, le=300.0)
+    obstacle_warning_cm: float = Field(default=35.0, ge=5.0, le=300.0)
     obstacle_critical_stop_cm: float = Field(default=15.0, ge=2.0, le=150.0)
     idle_hardware_release_sec: float = Field(default=60.0, ge=1.0)
 

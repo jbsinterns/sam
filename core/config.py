@@ -51,7 +51,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "safety": {
         "watchdog_timeout_sec": 0.50,
-        "obstacle_warning_cm": 45.0,
+        "obstacle_warning_cm": 35.0,
         "obstacle_critical_stop_cm": 15.0,
         "idle_hardware_release_sec": 60.0,
     },

@@ -1,10 +1,11 @@
 """
 SAM Rover - Directional LED Controller
+Supports native lgpio (kernel gpiochip), RPi.GPIO fallback, and mock simulation.
 Controls 4 directional LEDs (Front, Rear, Left, Right).
 """
 
 import threading
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from core.hal.base import BaseHardwareDevice
 
 
@@ -22,6 +23,9 @@ class LEDController(BaseHardwareDevice):
             "left": False,
             "right": False,
         }
+        self.backend = "mock"
+        self._lgpio = None
+        self._chip: Optional[int] = None
         self._gpio = None
         self._lock = threading.RLock()
 
@@ -30,10 +34,36 @@ class LEDController(BaseHardwareDevice):
             return True
 
         if self.is_mock:
+            self.backend = "mock"
             self.is_initialized = True
             print("[LEDs] Initialized in SIMULATION / MOCK mode.")
             return True
 
+        # 1. Primary: lgpio
+        try:
+            import lgpio
+            for c in (0, 4):
+                try:
+                    self._chip = lgpio.gpiochip_open(c)
+                    break
+                except Exception:
+                    pass
+
+            if self._chip is not None:
+                self._lgpio = lgpio
+                for direction, pin in self.pins.items():
+                    lgpio.gpio_claim_output(self._chip, pin, 0)
+                    lgpio.gpio_write(self._chip, pin, 0)
+
+                self.backend = "lgpio"
+                self.is_initialized = True
+                self.last_error = None
+                print("[LEDs] lgpio hardware LEDs initialized.")
+                return True
+        except Exception as e:
+            print(f"[LEDs] lgpio init bypassed ({e}); falling back to RPi.GPIO...")
+
+        # 2. Secondary Fallback: RPi.GPIO
         try:
             import RPi.GPIO as GPIO
             self._gpio = GPIO
@@ -44,13 +74,15 @@ class LEDController(BaseHardwareDevice):
                 self._gpio.setup(pin, self._gpio.OUT)
                 self._gpio.output(pin, self._gpio.LOW)
 
+            self.backend = "rpi_gpio"
             self.is_initialized = True
             self.last_error = None
-            print("[LEDs] Hardware LEDs initialized.")
+            print("[LEDs] RPi.GPIO hardware LEDs initialized.")
             return True
         except Exception as e:
             self.last_error = str(e)
             print(f"[LEDs] Hardware init failed: {e}. Falling back to Mock.")
+            self.backend = "mock"
             self.is_mock = True
             self.is_initialized = True
             return True
@@ -65,9 +97,14 @@ class LEDController(BaseHardwareDevice):
                 self.initialize()
 
             self.state[direction] = bool(is_on)
+            pin = self.pins[direction]
 
-            if not self.is_mock and self._gpio:
-                pin = self.pins[direction]
+            if self.backend == "lgpio" and self._chip is not None and self._lgpio:
+                try:
+                    self._lgpio.gpio_write(self._chip, pin, 1 if is_on else 0)
+                except Exception:
+                    pass
+            elif self.backend == "rpi_gpio" and self._gpio:
                 try:
                     self._gpio.output(pin, self._gpio.HIGH if is_on else self._gpio.LOW)
                 except Exception:
@@ -89,16 +126,35 @@ class LEDController(BaseHardwareDevice):
             self.set_led(d, is_on)
 
     def cleanup(self) -> None:
-        """Turns off all LEDs and releases pins."""
+        """Turns off all LEDs and completely releases pins."""
         with self._lock:
             self.set_all(False)
-            if not self.is_mock and self._gpio:
+            if self.backend == "lgpio" and self._chip is not None and self._lgpio:
                 try:
+                    for pin in self.pins.values():
+                        try:
+                            self._lgpio.gpio_write(self._chip, pin, 0)
+                            self._lgpio.gpio_free(self._chip, pin)
+                        except Exception:
+                            pass
+                    self._lgpio.gpiochip_close(self._chip)
+                except Exception as e:
+                    print(f"[LEDs] lgpio cleanup warning: {e}")
+                self._chip = None
+
+            if self.backend == "rpi_gpio" and self._gpio:
+                try:
+                    for pin in self.pins.values():
+                        try:
+                            self._gpio.output(pin, self._gpio.LOW)
+                        except Exception:
+                            pass
                     self._gpio.cleanup(list(self.pins.values()))
                 except Exception as e:
-                    print(f"[LEDs] Cleanup warning: {e}")
+                    print(f"[LEDs] RPi.GPIO cleanup warning: {e}")
+
             self.is_initialized = False
-            print("[LEDs] Hardware pins released.")
+            print("[LEDs] Hardware pins completely released.")
 
     def get_status(self) -> Dict[str, Any]:
         with self._lock:
@@ -107,6 +163,7 @@ class LEDController(BaseHardwareDevice):
             "name": self.name,
             "initialized": self.is_initialized,
             "mock": self.is_mock,
+            "backend": self.backend,
             "state": state_copy,
             "error": self.last_error,
         }

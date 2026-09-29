@@ -151,31 +151,8 @@ class MotorDriver(BaseHardwareDevice):
             target_left = max(-100.0, min(100.0, float(left)))
             target_right = max(-100.0, min(100.0, float(right)))
 
-            # Kinematic Slew-Rate Acceleration Limiter:
-            if immediate or (abs(target_left) < 1.0 and abs(target_right) < 1.0):
-                # Instant braking / emergency stop
-                self.left_speed = target_left
-                self.right_speed = target_right
-            else:
-                # Acceleration ramping (protects 60 RPM motor gears and battery power rail)
-                step = self.slew_rate_step
-
-                # Left motor slew
-                if abs(target_left) < abs(self.left_speed):
-                    # Decelerating towards neutral: snap faster for responsiveness
-                    self.left_speed = target_left
-                elif target_left > self.left_speed:
-                    self.left_speed = min(target_left, self.left_speed + step)
-                elif target_left < self.left_speed:
-                    self.left_speed = max(target_left, self.left_speed - step)
-
-                # Right motor slew
-                if abs(target_right) < abs(self.right_speed):
-                    self.right_speed = target_right
-                elif target_right > self.right_speed:
-                    self.right_speed = min(target_right, self.right_speed + step)
-                elif target_right < self.right_speed:
-                    self.right_speed = max(target_right, self.right_speed - step)
+            self.left_speed = target_left
+            self.right_speed = target_right
 
             if self.backend == "mock":
                 return

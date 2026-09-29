@@ -64,7 +64,7 @@ safety:
   watchdog_timeout_sec: 0.50
   
   # Distance threshold in cm for obstacle avoidance
-  obstacle_warning_cm: 45.0
+  obstacle_warning_cm: 35.0
   obstacle_critical_stop_cm: 15.0
 
   # Automatic GPIO release when web UI is inactive for this duration (seconds)

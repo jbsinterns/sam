@@ -809,6 +809,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           currentOperatorId = null;
           activeOperatorName = null;
+          document.querySelectorAll('.btn-led').forEach(btn => btn.classList.remove('active'));
+          const btnBuzzer = document.getElementById('btn-buzzer');
+          if (btnBuzzer) btnBuzzer.classList.remove('active');
         }
         updateLeaseUI();
 

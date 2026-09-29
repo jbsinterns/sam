@@ -130,20 +130,46 @@ class HardwareManager:
 
     def release_control(self, operator_id: Optional[str] = None, force: bool = True) -> Dict[str, Any]:
         """
-        Explicitly releases all GPIO pins and camera, leaving hardware completely free.
+        Explicitly releases all GPIO pins, LEDs, buzzer, motors, ultrasonic, and camera,
+        leaving all hardware completely free and safe.
         """
         with self._lease_lock:
-            if self.is_hardware_leased:
-                print(f"[HardwareManager] Releasing hardware pins & camera (released by {operator_id or 'operator'})...")
+            print(f"[HardwareManager] Releasing all hardware pins & camera (triggered by {operator_id or 'operator'})...")
+            try:
                 self.motors.cleanup()
+            except Exception as e:
+                print(f"[HardwareManager] Motor cleanup warning: {e}")
+            try:
                 self.ultrasonic.cleanup()
+            except Exception as e:
+                print(f"[HardwareManager] Ultrasonic cleanup warning: {e}")
+            try:
                 self.leds.cleanup()
+            except Exception as e:
+                print(f"[HardwareManager] LEDs cleanup warning: {e}")
+            try:
                 self.buzzer.cleanup()
+            except Exception as e:
+                print(f"[HardwareManager] Buzzer cleanup warning: {e}")
+            try:
                 self.imu.cleanup()
+            except Exception as e:
+                print(f"[HardwareManager] IMU cleanup warning: {e}")
+            try:
                 self.camera.stop()
-                self.is_hardware_leased = False
-                self.active_operator_id = None
-                self.active_operator_name = None
+            except Exception as e:
+                print(f"[HardwareManager] Camera stop warning: {e}")
+
+            # Fallback global cleanup if RPi.GPIO was mapped
+            try:
+                import RPi.GPIO as GPIO
+                GPIO.cleanup()
+            except Exception:
+                pass
+
+            self.is_hardware_leased = False
+            self.active_operator_id = None
+            self.active_operator_name = None
 
             return {"success": True, "hardware_leased": False}
 
@@ -201,9 +227,9 @@ class HardwareManager:
                 trim = max(-5.0, min(5.0, -gz * 0.15))
                 effective_angular += trim
 
-        # Speed-Adaptive Obstacle Distance for 60 RPM Motors
+        # Speed-Adaptive Obstacle Distance
         speed_factor = abs(linear) / 100.0
-        effective_warning_cm = self.warning_stop_cm + (speed_factor * 15.0)
+        effective_warning_cm = self.warning_stop_cm + (speed_factor * 5.0)
 
         # Obstacle avoidance check (active only when sensors are enabled)
         if self.sensors_enabled:
@@ -314,7 +340,7 @@ class HardwareManager:
                     rear_dist = self.ultrasonic.distances.get("rear")
 
                     speed_factor = max(abs(curr_l), abs(curr_r)) / 100.0
-                    adaptive_warning_cm = self.warning_stop_cm + (speed_factor * 15.0)
+                    adaptive_warning_cm = self.warning_stop_cm + (speed_factor * 5.0)
 
                     # 1. Forward motion safety check
                     if (curr_l > 0 or curr_r > 0) and front_dist is not None:

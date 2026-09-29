@@ -1,10 +1,11 @@
 """
 SAM Rover - Active Piezo Buzzer / Horn Driver
-Supports hardware GPIO output and simulated mock sound alerts.
+Supports native lgpio (kernel gpiochip), RPi.GPIO fallback, and mock simulation.
 """
 
 import time
 import threading
+from typing import Optional
 from core.hal.base import BaseHardwareDevice
 
 
@@ -14,10 +15,13 @@ class Buzzer(BaseHardwareDevice):
     Thread-safe and supports non-blocking audio chirps.
     """
 
-    def __init__(self, pin: int = 20, is_mock: bool = False):
+    def __init__(self, pin: int = 25, is_mock: bool = False):
         super().__init__("Buzzer", is_mock)
         self.pin = pin
         self.state = False
+        self.backend = "mock"
+        self._lgpio = None
+        self._chip: Optional[int] = None
         self._gpio = None
         self._lock = threading.RLock()
 
@@ -27,23 +31,51 @@ class Buzzer(BaseHardwareDevice):
                 return True
 
             if self.is_mock:
+                self.backend = "mock"
                 self.is_initialized = True
                 print("[Buzzer] Initialized in SIMULATION / MOCK mode.")
                 return True
 
+            # 1. Primary: lgpio
+            try:
+                import lgpio
+                for c in (0, 4):
+                    try:
+                        self._chip = lgpio.gpiochip_open(c)
+                        break
+                    except Exception:
+                        pass
+
+                if self._chip is not None:
+                    self._lgpio = lgpio
+                    lgpio.gpio_claim_output(self._chip, self.pin, 0)
+                    lgpio.gpio_write(self._chip, self.pin, 0)
+                    self.backend = "lgpio"
+                    self.is_initialized = True
+                    self.state = False
+                    self.last_error = None
+                    print(f"[Buzzer] lgpio buzzer initialized on GPIO {self.pin}.")
+                    return True
+            except Exception as e:
+                print(f"[Buzzer] lgpio init bypassed ({e}); attempting RPi.GPIO fallback...")
+
+            # 2. Secondary Fallback: RPi.GPIO
             try:
                 import RPi.GPIO as GPIO
                 self._gpio = GPIO
                 self._gpio.setmode(self._gpio.BCM)
                 self._gpio.setup(self.pin, self._gpio.OUT)
                 self._gpio.output(self.pin, self._gpio.LOW)
+                self.backend = "rpi_gpio"
                 self.is_initialized = True
                 self.state = False
-                print(f"[Buzzer] Hardware buzzer initialized on GPIO {self.pin}.")
+                self.last_error = None
+                print(f"[Buzzer] RPi.GPIO buzzer initialized on GPIO {self.pin}.")
                 return True
             except Exception as e:
                 self.last_error = str(e)
                 print(f"[Buzzer] Hardware init failed ({e}), falling back to mock.")
+                self.backend = "mock"
                 self.is_mock = True
                 self.is_initialized = True
                 return True
@@ -54,7 +86,12 @@ class Buzzer(BaseHardwareDevice):
             if not self.is_initialized:
                 self.initialize()
             self.state = True
-            if not self.is_mock and self._gpio:
+            if self.backend == "lgpio" and self._chip is not None and self._lgpio:
+                try:
+                    self._lgpio.gpio_write(self._chip, self.pin, 1)
+                except Exception:
+                    pass
+            elif self.backend == "rpi_gpio" and self._gpio:
                 try:
                     self._gpio.output(self.pin, self._gpio.HIGH)
                 except Exception:
@@ -64,7 +101,12 @@ class Buzzer(BaseHardwareDevice):
         """Turns the buzzer OFF."""
         with self._lock:
             self.state = False
-            if not self.is_mock and self._gpio:
+            if self.backend == "lgpio" and self._chip is not None and self._lgpio:
+                try:
+                    self._lgpio.gpio_write(self._chip, self.pin, 0)
+                except Exception:
+                    pass
+            elif self.backend == "rpi_gpio" and self._gpio:
                 try:
                     self._gpio.output(self.pin, self._gpio.LOW)
                 except Exception:
@@ -89,14 +131,25 @@ class Buzzer(BaseHardwareDevice):
         t.start()
 
     def cleanup(self) -> None:
+        """Silences buzzer and completely releases GPIO pin."""
         with self._lock:
-            self.state = False
-            if not self.is_mock and self._gpio:
+            self.off()
+            if self.backend == "lgpio" and self._chip is not None and self._lgpio:
+                try:
+                    self._lgpio.gpio_write(self._chip, self.pin, 0)
+                    self._lgpio.gpio_free(self._chip, self.pin)
+                    self._lgpio.gpiochip_close(self._chip)
+                except Exception as e:
+                    print(f"[Buzzer] lgpio cleanup warning: {e}")
+                self._chip = None
+
+            if self.backend == "rpi_gpio" and self._gpio:
                 try:
                     self._gpio.output(self.pin, self._gpio.LOW)
                     self._gpio.cleanup(self.pin)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"[Buzzer] RPi.GPIO cleanup warning: {e}")
+
             self.is_initialized = False
 
     def get_status(self) -> dict:
@@ -104,6 +157,7 @@ class Buzzer(BaseHardwareDevice):
             "name": self.name,
             "initialized": self.is_initialized,
             "mock": self.is_mock,
+            "backend": self.backend,
             "pin": self.pin,
             "state": self.state,
         }
