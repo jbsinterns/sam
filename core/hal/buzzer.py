@@ -80,7 +80,7 @@ class Buzzer(BaseHardwareDevice):
         """Turns the buzzer ON."""
         with self._lock:
             if not self.is_initialized:
-                self.initialize()
+                return
             self.state = True
             if self.backend == "lgpio" and self._chip is not None and self._lgpio:
                 try:

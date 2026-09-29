@@ -90,7 +90,7 @@ class LEDController(BaseHardwareDevice):
                 return False
 
             if not self.is_initialized:
-                self.initialize()
+                return False
 
             self.state[direction] = bool(is_on)
             pin = self.pins[direction]

@@ -319,6 +319,54 @@ class HardwareManager:
         except Exception:
             pass
 
+    def set_led(self, direction: str, is_on: bool, operator_id: Optional[str] = None) -> Dict[str, Any]:
+        """Controls a directional LED with hardware lease arbitration."""
+        if not self.is_hardware_leased:
+            return {"success": False, "blocked": True, "reason": "Hardware unclaimed. Press Claim button to control.", "state": self.leds.state}
+        if self.active_operator_id and (operator_id and operator_id != self.active_operator_id):
+            return {"success": False, "blocked": True, "reason": f"Observer mode: Rover controlled by {self.active_operator_name or 'active driver'}", "state": self.leds.state}
+        success = self.leds.set_led(direction, is_on)
+        return {"success": success, "blocked": False, "state": self.leds.state}
+
+    def toggle_led(self, direction: str, operator_id: Optional[str] = None) -> Dict[str, Any]:
+        """Toggles a directional LED with hardware lease arbitration."""
+        if not self.is_hardware_leased:
+            return {"success": False, "blocked": True, "reason": "Hardware unclaimed. Press Claim button to control.", "state": self.leds.state}
+        if self.active_operator_id and (operator_id and operator_id != self.active_operator_id):
+            return {"success": False, "blocked": True, "reason": f"Observer mode: Rover controlled by {self.active_operator_name or 'active driver'}", "state": self.leds.state}
+        success = self.leds.toggle(direction)
+        return {"success": success, "blocked": False, "state": self.leds.state}
+
+    def set_all_leds(self, is_on: bool, operator_id: Optional[str] = None) -> Dict[str, Any]:
+        """Sets all directional LEDs with hardware lease arbitration."""
+        if not self.is_hardware_leased:
+            return {"success": False, "blocked": True, "reason": "Hardware unclaimed. Press Claim button to control.", "state": self.leds.state}
+        if self.active_operator_id and (operator_id and operator_id != self.active_operator_id):
+            return {"success": False, "blocked": True, "reason": f"Observer mode: Rover controlled by {self.active_operator_name or 'active driver'}", "state": self.leds.state}
+        self.leds.set_all(is_on)
+        return {"success": True, "blocked": False, "state": self.leds.state}
+
+    def set_buzzer(self, is_on: bool, operator_id: Optional[str] = None) -> Dict[str, Any]:
+        """Sets horn buzzer state with hardware lease arbitration."""
+        if not self.is_hardware_leased:
+            return {"success": False, "blocked": True, "reason": "Hardware unclaimed. Press Claim button to control.", "state": self.buzzer.state}
+        if self.active_operator_id and (operator_id and operator_id != self.active_operator_id):
+            return {"success": False, "blocked": True, "reason": f"Observer mode: Rover controlled by {self.active_operator_name or 'active driver'}", "state": self.buzzer.state}
+        if is_on:
+            self.buzzer.on()
+        else:
+            self.buzzer.off()
+        return {"success": True, "blocked": False, "state": self.buzzer.state}
+
+    def toggle_buzzer(self, operator_id: Optional[str] = None) -> Dict[str, Any]:
+        """Toggles horn buzzer state with hardware lease arbitration."""
+        if not self.is_hardware_leased:
+            return {"success": False, "blocked": True, "reason": "Hardware unclaimed. Press Claim button to control.", "state": self.buzzer.state}
+        if self.active_operator_id and (operator_id and operator_id != self.active_operator_id):
+            return {"success": False, "blocked": True, "reason": f"Observer mode: Rover controlled by {self.active_operator_name or 'active driver'}", "state": self.buzzer.state}
+        state = self.buzzer.toggle()
+        return {"success": True, "blocked": False, "state": state}
+
     def _sensor_polling_loop(self) -> None:
         """
         Continuously reads ultrasonic sensors and IMU.

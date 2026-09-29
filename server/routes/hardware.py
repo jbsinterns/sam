@@ -86,33 +86,37 @@ def toggle_sensors(payload: BooleanPayload):
     return {"sensors_enabled": hw_manager.sensors_enabled}
 
 
+class ActionPayload(BaseModel):
+    operator_id: Optional[str] = None
+
+
+class ActionBooleanPayload(BaseModel):
+    enabled: bool
+    operator_id: Optional[str] = None
+
+
 @router.post("/leds/{direction}/toggle")
-def toggle_led(direction: str):
-    """Toggles a specific directional LED."""
-    success = hw_manager.leds.toggle(direction)
-    return {"success": success, "state": hw_manager.leds.state}
+def toggle_led(direction: str, payload: Optional[ActionPayload] = None):
+    """Toggles a specific directional LED with hardware lease arbitration."""
+    op_id = payload.operator_id if payload else None
+    return hw_manager.toggle_led(direction, operator_id=op_id)
 
 
 @router.post("/leds/all")
-def set_all_leds(payload: BooleanPayload):
-    """Turns all LEDs ON or OFF."""
-    hw_manager.leds.set_all(payload.enabled)
-    return {"state": hw_manager.leds.state}
+def set_all_leds(payload: ActionBooleanPayload):
+    """Turns all LEDs ON or OFF with hardware lease arbitration."""
+    return hw_manager.set_all_leds(payload.enabled, operator_id=payload.operator_id)
 
 
 @router.post("/buzzer")
-def set_buzzer(payload: BooleanPayload):
-    """Sets manual buzzer ON or OFF."""
-    if payload.enabled:
-        hw_manager.buzzer.on()
-    else:
-        hw_manager.buzzer.off()
-    return {"state": hw_manager.buzzer.state}
+def set_buzzer(payload: ActionBooleanPayload):
+    """Sets manual buzzer ON or OFF with hardware lease arbitration."""
+    return hw_manager.set_buzzer(payload.enabled, operator_id=payload.operator_id)
 
 
 @router.post("/buzzer/toggle")
-def toggle_buzzer():
-    """Toggles manual buzzer state."""
-    state = hw_manager.buzzer.toggle()
-    return {"state": state}
+def toggle_buzzer(payload: Optional[ActionPayload] = None):
+    """Toggles manual buzzer state with hardware lease arbitration."""
+    op_id = payload.operator_id if payload else None
+    return hw_manager.toggle_buzzer(operator_id=op_id)
 

@@ -98,29 +98,26 @@ async def websocket_teleop_endpoint(websocket: WebSocket):
                 elif mtype == "set_led":
                     direction = msg.get("direction", "")
                     state = bool(msg.get("state", False))
-                    hw_manager.leds.set_led(direction, state)
+                    hw_manager.set_led(direction, state, operator_id=client_operator_id)
 
                 elif mtype == "toggle_led":
                     direction = msg.get("direction", "")
-                    hw_manager.leds.toggle(direction)
+                    hw_manager.toggle_led(direction, operator_id=client_operator_id)
 
                 elif mtype in ("set_all_leds", "toggle_all_leds"):
                     state = msg.get("state")
                     if state is None:
                         any_on = any(hw_manager.leds.state.values())
-                        hw_manager.leds.set_all(not any_on)
+                        hw_manager.set_all_leds(not any_on, operator_id=client_operator_id)
                     else:
-                        hw_manager.leds.set_all(bool(state))
+                        hw_manager.set_all_leds(bool(state), operator_id=client_operator_id)
 
                 elif mtype == "toggle_buzzer":
-                    hw_manager.buzzer.toggle()
+                    hw_manager.toggle_buzzer(operator_id=client_operator_id)
 
                 elif mtype == "set_buzzer":
                     state = bool(msg.get("state", False))
-                    if state:
-                        hw_manager.buzzer.on()
-                    else:
-                        hw_manager.buzzer.off()
+                    hw_manager.set_buzzer(state, operator_id=client_operator_id)
 
                 elif mtype == "ping":
                     await websocket.send_text(json.dumps({

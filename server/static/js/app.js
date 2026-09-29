@@ -333,6 +333,10 @@ document.addEventListener('DOMContentLoaded', () => {
       leaseBtnText.textContent = 'Claim';
       if (leaseIconWrap) leaseIconWrap.innerHTML = ICON_UNLOCKED;
       if (controls) controls.setEnabled(false);
+      document.querySelectorAll('.btn-led, #btn-leds-all').forEach(b => b.classList.remove('active'));
+      toggleHornBtns.forEach(b => b.classList.remove('active'));
+      hornActive = false;
+      allLedsOn = false;
     } else if (isMe) {
       leaseBadge.textContent = 'DRIVER (YOU)';
       leaseBadge.className = 'badge active';
@@ -348,6 +352,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (leaseIconWrap) leaseIconWrap.innerHTML = ICON_UNLOCKED;
       if (controls) controls.setEnabled(false);
     }
+
+    const canControl = isMe;
+    document.querySelectorAll('.btn-led, #btn-leds-all, .toggle-horn-btn, #btn-horn').forEach(el => {
+      el.classList.toggle('unclaimed-locked', !canControl);
+    });
 
     if (telemLeaseStatus) {
       telemLeaseStatus.textContent = isHardwareLeased ? (isMe ? 'CLAIMED (YOU)' : 'OBSERVER') : 'UNCLAIMED';
@@ -878,11 +887,22 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Directional 4 LEDs (Front, Rear, Left, Right) ---
   document.querySelectorAll('.btn-led[data-dir]').forEach(btn => {
     btn.addEventListener('click', () => {
+      if (!canUserControl()) {
+        const msg = !isHardwareLeased 
+          ? 'Hardware unclaimed. Press Claim button to control LEDs.' 
+          : `Observer mode: Rover controlled by ${activeOperatorName || 'Driver'}`;
+        showHUDWarning(msg, 'warning');
+        return;
+      }
       const dir = btn.dataset.dir;
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'toggle_led', direction: dir }));
+        ws.send(JSON.stringify({ type: 'toggle_led', direction: dir, operator_id: clientId }));
       } else {
-        fetch(`/api/hardware/leds/${dir}/toggle`, { method: 'POST' }).catch(() => {});
+        fetch(`/api/hardware/leds/${dir}/toggle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ operator_id: clientId }),
+        }).catch(() => {});
       }
     });
   });
@@ -892,19 +912,26 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnLedsAll = document.getElementById('btn-leds-all');
   if (btnLedsAll) {
     btnLedsAll.addEventListener('click', async () => {
+      if (!canUserControl()) {
+        const msg = !isHardwareLeased 
+          ? 'Hardware unclaimed. Press Claim button to control LEDs.' 
+          : `Observer mode: Rover controlled by ${activeOperatorName || 'Driver'}`;
+        showHUDWarning(msg, 'warning');
+        return;
+      }
       allLedsOn = !allLedsOn;
       btnLedsAll.classList.toggle('active', allLedsOn);
       document.querySelectorAll('.btn-led[data-dir]').forEach(b => {
         b.classList.toggle('active', allLedsOn);
       });
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'toggle_all_leds', state: allLedsOn }));
+        ws.send(JSON.stringify({ type: 'toggle_all_leds', state: allLedsOn, operator_id: clientId }));
       }
       try {
         await fetch('/api/hardware/leds/all', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enabled: allLedsOn }),
+          body: JSON.stringify({ enabled: allLedsOn, operator_id: clientId }),
         });
       } catch (e) {
         console.error('Failed to toggle all LEDs:', e);
@@ -916,15 +943,24 @@ document.addEventListener('DOMContentLoaded', () => {
   let hornActive = false;
 
   function triggerHorn(state) {
+    if (!canUserControl()) {
+      if (state) {
+        const msg = !isHardwareLeased 
+          ? 'Hardware unclaimed. Press Claim button to use Horn.' 
+          : `Observer mode: Rover controlled by ${activeOperatorName || 'Driver'}`;
+        showHUDWarning(msg, 'warning');
+      }
+      return;
+    }
     hornActive = state;
     toggleHornBtns.forEach(btn => btn.classList.toggle('active', state));
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'set_buzzer', state: state }));
+      ws.send(JSON.stringify({ type: 'set_buzzer', state: state, operator_id: clientId }));
     } else {
       fetch('/api/hardware/buzzer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: state }),
+        body: JSON.stringify({ enabled: state, operator_id: clientId }),
       }).catch(() => { });
     }
   }
