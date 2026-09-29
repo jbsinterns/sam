@@ -167,6 +167,13 @@ class HardwareManager:
             except Exception:
                 pass
 
+            # Close shared lgpio chip handle and release any remaining kernel pins
+            try:
+                from core.hal.gpio_chip import gpio_chip_manager
+                gpio_chip_manager.close_chip()
+            except Exception as e:
+                print(f"[HardwareManager] GPIO chip close warning: {e}")
+
             self.is_hardware_leased = False
             self.active_operator_id = None
             self.active_operator_name = None

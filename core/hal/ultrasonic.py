@@ -9,6 +9,7 @@ import math
 import threading
 from typing import Dict, Any, Optional
 from core.hal.base import BaseHardwareDevice
+from core.hal.gpio_chip import gpio_chip_manager
 
 
 class UltrasonicSensorArray(BaseHardwareDevice):
@@ -59,29 +60,24 @@ class UltrasonicSensorArray(BaseHardwareDevice):
             print("[Ultrasonic] Initialized in SIMULATION / MOCK mode.")
             return True
 
-        # 1. Primary: lgpio
+        # 1. Primary: lgpio via shared GPIOChipManager
         try:
-            import lgpio
-            for c in (0, 4):
-                try:
-                    self._chip = lgpio.gpiochip_open(c)
-                    break
-                except Exception:
-                    pass
+            if gpio_chip_manager.is_available:
+                self._chip = gpio_chip_manager.get_chip()
+                if self._chip is not None:
+                    import lgpio
+                    self._lgpio = lgpio
+                    for direction, cfg in self.pins.items():
+                        trig = cfg["trigger"]
+                        echo = cfg["echo"]
+                        gpio_chip_manager.claim_output(trig, 0)
+                        gpio_chip_manager.claim_input(echo)
 
-            if self._chip is not None:
-                self._lgpio = lgpio
-                for direction, cfg in self.pins.items():
-                    trig = cfg["trigger"]
-                    echo = cfg["echo"]
-                    lgpio.gpio_claim_output(self._chip, trig, 0)
-                    lgpio.gpio_claim_input(self._chip, echo)
-
-                self.backend = "lgpio"
-                self.is_initialized = True
-                self.last_error = None
-                print("[Ultrasonic] lgpio hardware array initialized.")
-                return True
+                    self.backend = "lgpio"
+                    self.is_initialized = True
+                    self.last_error = None
+                    print("[Ultrasonic] lgpio hardware array initialized via shared gpiochip.")
+                    return True
         except Exception as e:
             print(f"[Ultrasonic] lgpio init bypassed ({e}); attempting RPi.GPIO fallback...")
 
@@ -241,15 +237,11 @@ class UltrasonicSensorArray(BaseHardwareDevice):
     def cleanup(self) -> None:
         """Releases GPIO pins."""
         with self._lock:
-            if self.backend == "lgpio" and self._chip is not None and self._lgpio:
+            if self.backend == "lgpio":
                 try:
                     for cfg in self.pins.values():
-                        try:
-                            self._lgpio.gpio_free(self._chip, cfg["trigger"])
-                            self._lgpio.gpio_free(self._chip, cfg["echo"])
-                        except Exception:
-                            pass
-                    self._lgpio.gpiochip_close(self._chip)
+                        gpio_chip_manager.free_pin(cfg["trigger"])
+                        gpio_chip_manager.free_pin(cfg["echo"])
                 except Exception as e:
                     print(f"[Ultrasonic] lgpio cleanup warning: {e}")
                 self._chip = None

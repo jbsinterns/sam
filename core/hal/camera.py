@@ -70,11 +70,19 @@ class CameraManager:
         self.last_raw_frame: Optional[Any] = None
         self.last_frame_time = 0.0
         self._last_init_attempt = 0.0
-
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
         self._lifecycle_lock = threading.Lock()
         self._mock_counter = 0
+
+        # On-Demand Video Encoding optimization
+        self.has_viewers = False
+        self._last_viewer_time = 0.0
+
+    def report_viewer_active(self) -> None:
+        """Notifies camera manager that an active client is streaming frames."""
+        self._last_viewer_time = time.time()
+        self.has_viewers = True
 
     def start(self) -> None:
         """Starts background frame acquisition thread with immediate hardware re-initialization."""
@@ -234,6 +242,15 @@ class CameraManager:
 
         try:
             while self.is_running:
+                now = time.time()
+                active = (now - self._last_viewer_time) < 2.5
+                self.has_viewers = active
+
+                # On-Demand CPU Saver: Idle if no client is actively requesting video
+                if not active and self.last_frame_bytes is not None and (now - self.last_frame_time) < 1.5:
+                    time.sleep(0.08)
+                    continue
+
                 frame_bytes: Optional[bytes] = None
                 raw_frame: Optional[Any] = None
 
@@ -296,6 +313,7 @@ class CameraManager:
         return {
             "is_running": self.is_running,
             "has_physical_cam": self.active_index is not None,
+            "has_viewers": self.has_viewers,
             "active_index": self.active_index,
             "resolution": f"{self.width}x{self.height}",
             "fps": self.fps,

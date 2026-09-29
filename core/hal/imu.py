@@ -33,6 +33,10 @@ class IMUDriver(BaseHardwareDevice):
         self.bus = None
 
         self._lock = threading.Lock()
+        self._pitch = 0.0
+        self._roll = 0.0
+        self._last_time = time.time()
+        self._alpha = float(config.get("filter_alpha", 0.96))
         self.data: Dict[str, Any] = {
             "ax": 0.0, "ay": 0.0, "az": 1.0,
             "gx": 0.0, "gy": 0.0, "gz": 0.0,
@@ -96,6 +100,7 @@ class IMUDriver(BaseHardwareDevice):
         if self.is_mock or not self.bus or self.active_address is None:
             self._mock_step += 0.05
             pitch = round(3.0 * math.sin(self._mock_step), 1)
+            roll = round(2.0 * math.cos(self._mock_step), 1)
             with self._lock:
                 self.data = {
                     "ax": round(0.05 * math.sin(self._mock_step), 3),
@@ -128,9 +133,27 @@ class IMUDriver(BaseHardwareDevice):
 
                 temp_c = round((raw_temp / 340.0) + 36.53, 1)
 
-                # Compute pitch and roll angles from gravity vector
-                pitch = round(math.atan2(ax, math.sqrt(ay**2 + az**2)) * 180.0 / math.pi, 1)
-                roll = round(math.atan2(ay, math.sqrt(ax**2 + az**2)) * 180.0 / math.pi, 1)
+                # Complementary Filter: Fuses high-pass gyro integration with low-pass accelerometer tilt
+                # Rejects motor vibration spikes while preventing drift
+                now = time.time()
+                dt = max(0.001, min(0.2, now - self._last_time))
+                self._last_time = now
+
+                accel_pitch = math.atan2(-ax, math.sqrt(ay**2 + az**2)) * 180.0 / math.pi
+                accel_roll = math.atan2(ay, az if az != 0 else 0.001) * 180.0 / math.pi
+
+                gyro_pitch = self._pitch + (gy * dt)
+                gyro_roll = self._roll + (gx * dt)
+
+                if abs(self._pitch) < 0.01 and abs(self._roll) < 0.01:
+                    self._pitch = accel_pitch
+                    self._roll = accel_roll
+                else:
+                    self._pitch = (self._alpha * gyro_pitch) + ((1.0 - self._alpha) * accel_pitch)
+                    self._roll = (self._alpha * gyro_roll) + ((1.0 - self._alpha) * accel_roll)
+
+                pitch = round(self._pitch, 1)
+                roll = round(self._roll, 1)
 
                 self.data = {
                     "ax": ax, "ay": ay, "az": az,

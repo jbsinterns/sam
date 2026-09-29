@@ -7,6 +7,7 @@ import time
 import threading
 from typing import Optional
 from core.hal.base import BaseHardwareDevice
+from core.hal.gpio_chip import gpio_chip_manager
 
 
 class Buzzer(BaseHardwareDevice):
@@ -36,26 +37,21 @@ class Buzzer(BaseHardwareDevice):
                 print("[Buzzer] Initialized in SIMULATION / MOCK mode.")
                 return True
 
-            # 1. Primary: lgpio
+            # 1. Primary: lgpio via shared GPIOChipManager
             try:
-                import lgpio
-                for c in (0, 4):
-                    try:
-                        self._chip = lgpio.gpiochip_open(c)
-                        break
-                    except Exception:
-                        pass
-
-                if self._chip is not None:
-                    self._lgpio = lgpio
-                    lgpio.gpio_claim_output(self._chip, self.pin, 0)
-                    lgpio.gpio_write(self._chip, self.pin, 0)
-                    self.backend = "lgpio"
-                    self.is_initialized = True
-                    self.state = False
-                    self.last_error = None
-                    print(f"[Buzzer] lgpio buzzer initialized on GPIO {self.pin}.")
-                    return True
+                if gpio_chip_manager.is_available:
+                    self._chip = gpio_chip_manager.get_chip()
+                    if self._chip is not None:
+                        import lgpio
+                        self._lgpio = lgpio
+                        gpio_chip_manager.claim_output(self.pin, 0)
+                        gpio_chip_manager.write_pin(self.pin, 0)
+                        self.backend = "lgpio"
+                        self.is_initialized = True
+                        self.state = False
+                        self.last_error = None
+                        print(f"[Buzzer] lgpio buzzer initialized on GPIO {self.pin} via shared gpiochip.")
+                        return True
             except Exception as e:
                 print(f"[Buzzer] lgpio init bypassed ({e}); attempting RPi.GPIO fallback...")
 
@@ -134,11 +130,10 @@ class Buzzer(BaseHardwareDevice):
         """Silences buzzer and completely releases GPIO pin."""
         with self._lock:
             self.off()
-            if self.backend == "lgpio" and self._chip is not None and self._lgpio:
+            if self.backend == "lgpio":
                 try:
-                    self._lgpio.gpio_write(self._chip, self.pin, 0)
-                    self._lgpio.gpio_free(self._chip, self.pin)
-                    self._lgpio.gpiochip_close(self._chip)
+                    gpio_chip_manager.write_pin(self.pin, 0)
+                    gpio_chip_manager.free_pin(self.pin)
                 except Exception as e:
                     print(f"[Buzzer] lgpio cleanup warning: {e}")
                 self._chip = None

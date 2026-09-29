@@ -8,6 +8,7 @@ import time
 import threading
 from typing import Dict, Any, Optional
 from core.hal.base import BaseHardwareDevice
+from core.hal.gpio_chip import gpio_chip_manager
 
 
 class MotorDriver(BaseHardwareDevice):
@@ -68,25 +69,18 @@ class MotorDriver(BaseHardwareDevice):
         # 1. Primary Driver: lgpio (Kernel character device /dev/gpiochip0)
         try:
             import lgpio
-            chip_idx = 0
-            # Auto-detect valid chip on Pi 4 (chip 0) or Pi 5 (chip 4)
-            for c in (0, 4):
-                try:
-                    self._chip = lgpio.gpiochip_open(c)
-                    chip_idx = c
-                    break
-                except Exception:
-                    pass
+            if gpio_chip_manager.is_available:
+                self._chip = gpio_chip_manager.get_chip()
 
             if self._chip is not None:
                 self._lgpio = lgpio
                 for pin in all_pins:
-                    lgpio.gpio_claim_output(self._chip, pin, 0)
+                    gpio_chip_manager.claim_output(pin, 0)
 
                 self.backend = "lgpio"
                 self.is_initialized = True
                 self.last_error = None
-                print(f"[Motors] lgpio hardware driver initialized on gpiochip{chip_idx} at {freq}Hz.")
+                print(f"[Motors] lgpio hardware driver initialized via shared gpiochip at {freq}Hz.")
                 return True
         except Exception as e:
             print(f"[Motors] lgpio initialization bypassed ({e}); attempting RPi.GPIO fallback...")
@@ -305,14 +299,10 @@ class MotorDriver(BaseHardwareDevice):
             all_pins = [lp["ena"], lp["in1"], lp["in2"], rp["enb"], rp["in3"], rp["in4"]]
 
             # Cleanup lgpio
-            if self.backend == "lgpio" and self._chip is not None and self._lgpio:
+            if self.backend == "lgpio":
                 try:
                     for p in all_pins:
-                        try:
-                            self._lgpio.gpio_free(self._chip, p)
-                        except Exception:
-                            pass
-                    self._lgpio.gpiochip_close(self._chip)
+                        gpio_chip_manager.free_pin(p)
                 except Exception as e:
                     print(f"[Motors] lgpio cleanup warning: {e}")
                 self._chip = None

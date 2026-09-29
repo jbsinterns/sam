@@ -18,6 +18,7 @@ async def generate_frames():
 
     try:
         while hw_manager._is_running:
+            hw_manager.camera.report_viewer_active()
             frame = hw_manager.camera.get_latest_frame()
             if frame is not last_frame_sent:
                 last_frame_sent = frame
@@ -47,6 +48,7 @@ async def video_feed():
 @router.get("/snapshot")
 def video_snapshot():
     """Returns a single latest JPEG frame capture."""
+    hw_manager.camera.report_viewer_active()
     frame = hw_manager.camera.get_latest_frame()
     return Response(content=frame, media_type="image/jpeg")
 

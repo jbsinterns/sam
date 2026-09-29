@@ -57,6 +57,7 @@ gpio:
     # Reserved I2C bus pins (GPIO 2 = SDA, GPIO 3 = SCL)
     bus: 1
     addresses: [0x68, 0x69] # Auto-scanned
+    filter_alpha: 0.96      # Complementary filter fusion factor (0.96 gyro / 0.04 gravity tilt)
 
 # --- Safety & Control Parameters ---
 safety:

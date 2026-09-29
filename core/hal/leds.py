@@ -7,6 +7,7 @@ Controls 4 directional LEDs (Front, Rear, Left, Right).
 import threading
 from typing import Dict, Any, Optional
 from core.hal.base import BaseHardwareDevice
+from core.hal.gpio_chip import gpio_chip_manager
 
 
 class LEDController(BaseHardwareDevice):
@@ -39,27 +40,22 @@ class LEDController(BaseHardwareDevice):
             print("[LEDs] Initialized in SIMULATION / MOCK mode.")
             return True
 
-        # 1. Primary: lgpio
+        # 1. Primary: lgpio via shared GPIOChipManager
         try:
-            import lgpio
-            for c in (0, 4):
-                try:
-                    self._chip = lgpio.gpiochip_open(c)
-                    break
-                except Exception:
-                    pass
+            if gpio_chip_manager.is_available:
+                self._chip = gpio_chip_manager.get_chip()
+                if self._chip is not None:
+                    import lgpio
+                    self._lgpio = lgpio
+                    for direction, pin in self.pins.items():
+                        gpio_chip_manager.claim_output(pin, 0)
+                        gpio_chip_manager.write_pin(pin, 0)
 
-            if self._chip is not None:
-                self._lgpio = lgpio
-                for direction, pin in self.pins.items():
-                    lgpio.gpio_claim_output(self._chip, pin, 0)
-                    lgpio.gpio_write(self._chip, pin, 0)
-
-                self.backend = "lgpio"
-                self.is_initialized = True
-                self.last_error = None
-                print("[LEDs] lgpio hardware LEDs initialized.")
-                return True
+                    self.backend = "lgpio"
+                    self.is_initialized = True
+                    self.last_error = None
+                    print("[LEDs] lgpio hardware LEDs initialized via shared gpiochip.")
+                    return True
         except Exception as e:
             print(f"[LEDs] lgpio init bypassed ({e}); falling back to RPi.GPIO...")
 
@@ -129,15 +125,11 @@ class LEDController(BaseHardwareDevice):
         """Turns off all LEDs and completely releases pins."""
         with self._lock:
             self.set_all(False)
-            if self.backend == "lgpio" and self._chip is not None and self._lgpio:
+            if self.backend == "lgpio":
                 try:
                     for pin in self.pins.values():
-                        try:
-                            self._lgpio.gpio_write(self._chip, pin, 0)
-                            self._lgpio.gpio_free(self._chip, pin)
-                        except Exception:
-                            pass
-                    self._lgpio.gpiochip_close(self._chip)
+                        gpio_chip_manager.write_pin(pin, 0)
+                        gpio_chip_manager.free_pin(pin)
                 except Exception as e:
                     print(f"[LEDs] lgpio cleanup warning: {e}")
                 self._chip = None
