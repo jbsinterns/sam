@@ -232,6 +232,7 @@ if __name__ == "__main__":
     docs = [
         ("TECHNICAL_DEPLOYMENT_SOP.md", "TECHNICAL_DEPLOYMENT_SOP.pdf"),
         ("USER_OPERATOR_GUIDE.md", "USER_OPERATOR_GUIDE.pdf"),
+        ("END_USER_PRODUCT_GUIDE.md", "END_USER_PRODUCT_GUIDE.pdf"),
     ]
     for md_file, pdf_file in docs:
         convert_md_to_pdf(md_file, pdf_file)
