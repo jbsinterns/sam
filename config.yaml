@@ -84,6 +84,7 @@ camera:
 network:
   ap_interface: "wlan0"
   ap_ssid: "SAM-Rover-Setup"
+  ap_password: "raspberry"
   ap_ip: "192.168.4.1"
   external_interface: "wlan1"
   wifi_check_interval_sec: 15

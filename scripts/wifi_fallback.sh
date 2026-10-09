@@ -71,6 +71,7 @@ start_hotspot() {
     if ! nmcli con show "${HOTSPOT_NAME}" >/dev/null 2>&1; then
         nmcli con add type wifi ifname "${AP_INTERFACE}" con-name "${HOTSPOT_NAME}" autoconnect no ssid "${HOTSPOT_SSID}"
         nmcli con modify "${HOTSPOT_NAME}" 802-11-wireless.mode ap 802-11-wireless.band bg
+        nmcli con modify "${HOTSPOT_NAME}" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "raspberry"
         nmcli con modify "${HOTSPOT_NAME}" ipv4.method shared ipv4.addresses "${HOTSPOT_IP}"
     fi
     nmcli con up "${HOTSPOT_NAME}"

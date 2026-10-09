@@ -270,6 +270,8 @@ class NetworkManager:
                     "nmcli", "con", "modify", self.HOTSPOT_NAME,
                     "802-11-wireless.mode", "ap",
                     "802-11-wireless.band", "bg",
+                    "wifi-sec.key-mgmt", "wpa-psk",
+                    "wifi-sec.psk", "raspberry",
                     "ipv4.method", "shared",
                     "ipv4.addresses", self.HOTSPOT_IP
                 ], capture_output=True, timeout=5)
