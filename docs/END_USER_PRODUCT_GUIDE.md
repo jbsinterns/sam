@@ -212,6 +212,12 @@ Tap any of the speed preset buttons to match where you are driving:
 * **Headlights & Tail-lights**: Tap **`Front`**, **`Rear`**, **`Left`**, **`Right`**, or **`All`** to light up the path ahead.
 * **Audio Horn**: Tap and hold the **`Horn`** button to sound the buzzer chirp — great for warning pets or people in the hallway!
 
+<p align="center">
+  <img src="screenshots/Figure_18_Camera_LEDs_Sensors.png" alt="Camera Feed, LED Controls, Horn, and Ultrasonic Sensors" width="85%">
+  <br>
+  <em>Figure: Live camera view, directional LED controls, horn button, and real-time obstacle sensors on the SAM Dashboard.</em>
+</p>
+
 ---
 
 ## 7. Built-in Smart Safety Features
