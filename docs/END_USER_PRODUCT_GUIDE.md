@@ -1,4 +1,4 @@
-# SAM Rover — End-User Product Guide & Quick-Start Manual
+﻿# SAM Rover — End-User Product Guide & Quick-Start Manual
 
 **Welcome to your SAM Rover!**  
 This guide will walk you through unboxing, powering on, connecting to Wi-Fi for the first time, and driving your rover from your phone, tablet, or laptop — no programming or technical setup required.
@@ -153,7 +153,7 @@ The dashboard is designed to be intuitive, responsive, and fun. Here is how to t
 +------------------------------------------------------+-------------------------------+
 | SPEED GEARS:  [ LOW (30%) ]   [ MED (60%) ]   [ HIGH (90%) ]                          |
 | LIGHTS:       [ FRONT ] [ REAR ] [ LEFT ] [ RIGHT ] [ ALL ON ]                       |
-| AUDIO:        [ HORN BEEP ]                     CONTROLLER:   [ Gamepad Connected ]  |
+| AUDIO:        [ HORN BEEP ]                     CONTROLLER:   [ Touch / Keys Ready ]  |
 +--------------------------------------------------------------------------------------+
 ```
 
@@ -167,7 +167,7 @@ To prevent two people from driving at the same time:
 
 ### Step 2: Choose Your Favorite Control Method
 
-You can drive using any of these 4 methods:
+You can drive using any of these 3 methods:
 
 #### Method A: On-Screen Touch D-Pad (Phones & Tablets)
 * Tap the big directional buttons on your screen:
@@ -191,16 +191,6 @@ You can drive using any of these 4 methods:
 * **`Spacebar`**: Instant Emergency Brake
 * **`H`**: Beep the Horn
 * **`L`**: Toggle Headlights On/Off
-
-#### Method D: Game Controller (Xbox, PlayStation, USB Gamepad)
-Connect your favorite controller via Bluetooth or USB to your phone, tablet, or laptop:
-* **Right Trigger (`RT`)**: Accelerate forward (gentle pull = slow, full pull = fast).
-* **Left Trigger (`LT`)**: Brake / Reverse.
-* **Left Thumbstick**: Steer left and right smoothly.
-* **`A` Button** (Xbox) / **`Cross`** (PS): Beep Horn.
-* **`X` Button** (Xbox) / **`Square`** (PS): Turn Headlights On/Off.
-* **`B` Button** (Xbox) / **`Circle`** (PS): Emergency Stop.
-* **Bumpers (`LB` / `RB`)** or **D-Pad Up/Down**: Shift speed gears up or down!
 
 ---
 

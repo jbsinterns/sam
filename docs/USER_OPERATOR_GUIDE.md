@@ -1,4 +1,4 @@
-# SAM Rover — Comprehensive User & Operator Field Manual
+﻿# SAM Rover — Comprehensive User & Operator Field Manual
 
 **Document Version:** 4.2 (Production Stable)  
 **Target Audience:** Field Operators, Robotics Students, Lab Technicians, Competition Drivers  
@@ -76,7 +76,7 @@ Follow this step-by-step checklist to deploy and operate the rover immediately:
          v                                                           v
 [ Step 6: Drive! ]    <---  [ Step 5: Select Gear ]   <---  [ Step 4: Claim Lease ]
   WASD / Joystick /           25%, 50%, 75%, 100%            Click Amber "Claim"
-  Gamepad Controller                                         Status: DRIVER (YOU)
+  Keyboard Controller                                         Status: DRIVER (YOU)
 ```
 
 1. **Verify Power Isolation**: Ensure the logic power switch (Raspberry Pi) and the motor battery switch are both toggled **ON**. Observe steady red power LEDs on the Pi and the red indicator LED on the L298N driver board.
@@ -210,7 +210,7 @@ The dashboard is designed for high-stress teleoperation with zero latency, high-
 |  LINK: STABLE   RATE: 10 Hz   LEASE: DRIVER       |  GEARS:  [25%]   [50%]   [75%]   [100%]        |
 |  SONAR: F: 82cm  R: 120cm  L: 45cm  R: 62cm       |  STEERING TRIM:  [-20% <====[]====> +20%]      |
 |  VITALS: CPU 12%  RAM 34%  PWR: OK  [REC LOG]     |  LIGHTS: [FRONT] [REAR] [LEFT] [RIGHT] [ALL]   |
-|  RADAR: 2D Multi-Sector Obstacle Arc Cones        |  AUDIO:  [ HORN / BUZZER ]   [ GAMEPAD: ON ]   |
+|  RADAR: 2D Multi-Sector Obstacle Arc Cones        |  AUDIO:  [ HORN / BUZZER ]   [ TOUCH / KEYS ]   |
 +---------------------------------------------------+------------------------------------------------+
 ```
 
@@ -264,7 +264,7 @@ To prevent dangerous conflicting commands when multiple operators or observers o
 
 ### 4.2 Control Modes & Input Methods
 
-SAM supports four distinct, simultaneously active input modalities:
+SAM supports three distinct, simultaneously active input modalities:
 
 #### Modality 1: Desktop Keyboard Controls
 The fastest and most tactile control method for laptop and desktop workstations:
@@ -298,54 +298,6 @@ For smooth omnidirectional steering with nuanced velocity authority:
   - **Horizontal Displacement ($X$-axis)**: Proportional angular steering with differential curve blending.
 - **Dynamic Cybernetic Tether**: A visual beam anchors the handle to the base ring, providing immediate optical feedback of the deflection vector.
 - **Return-to-Center Failsafe**: Releasing your finger snaps the joystick to neutral $(0, 0)$ and commands an instantaneous zero-velocity motor stop.
-
----
-
-#### Modality 4: Gamepad & Console Controller Integration (Xbox / PlayStation / USB HID)
-The rover includes built-in driver support for all standard **W3C Gamepad API** compatible controllers:
-
-```
-                          [LB] Gear Down          [RB] Gear Up
-                          [LT] Reverse/Brake      [RT] Forward Gas
-                                 \              /
-                                  \            /
-                             +----------------------+
-                             |                      |
-             Left Stick ---> |  (L)            (Y)  |
-      Steering & Throttle    |             (X)     (B) <-- Emergency Stop
-                             |  [^]            (A)  |       (Instant Cut)
-                             | [<] [>]              | <-- Horn / Buzzer
-                D-Pad Shift  |  [v]                 |     (Hold to Chirp)
-                Up/Down      +----------------------+
-                                     Toggle LEDs
-```
-
-##### Supported Gamepad Hardware:
-- **Microsoft Xbox Controllers**: Xbox One, Xbox Series X\|S, Xbox 360 (Wireless via Bluetooth or USB cable).
-- **Sony PlayStation Controllers**: DualShock 4 (PS4), DualSense (PS5).
-- **Logitech Gamepads**: F310, F710 (in DirectInput or XInput mode).
-- **Generic USB/Bluetooth HID Gamepads**: 8BitDo, Nintendo Pro Controller, standard Android/PC controllers.
-
-##### Gamepad Action Button Mapping:
-
-| Controller Button | Function | Operational Behavior |
-| :--- | :--- | :--- |
-| **`A` Button** (Xbox A / PS Cross) | **Audio Horn / Buzzer** | Continuous state: hold button down to sound horn, release to silence. |
-| **`X` Button** (Xbox X / PS Square) | **Toggle Headlights** | Edge-triggered: press once to toggle all directional LEDs ON/OFF. |
-| **`B` Button** (Xbox B / PS Circle) | **Emergency Stop (E-Stop)** | Edge-triggered: instantly terminates motor drive and cuts PWM to 0%. |
-| **`LB`** (Left Bumper) or **`D-Pad Down`** | **Shift Gear Down** | Steps down velocity limit ($100\% \rightarrow 75\% \rightarrow 50\% \rightarrow 25\%$). |
-| **`RB`** (Right Bumper) or **`D-Pad Up`** | **Shift Gear Up** | Steps up velocity limit ($25\% \rightarrow 50\% \rightarrow 75\% \rightarrow 100\%$). |
-| **`RT`** (Right Trigger) | **Racing Forward Throttle** | Proportional analog acceleration forward ($0.0 \rightarrow 1.0$). |
-| **`LT`** (Left Trigger) | **Racing Reverse Throttle** | Proportional analog acceleration reverse ($0.0 \rightarrow 1.0$). |
-| **Left Stick Horizontal (`Axis 0`)** | **Proportional Steering** | Smooth turning left/right with automated centering failsafe. |
-| **Left Stick Vertical (`Axis 1`)** | **Single-Stick Throttle** | Fallback forward/reverse throttle if triggers are not pressed. |
-
-##### Exponential Sensitivity Curve ($v_{\text{expo}}$):
-To eliminate "twitchy" steering while preserving maximum sprint velocity, the controller applies an exponential mathematical response curve:
-$$v_{\text{scaled}} = \operatorname{sign}(v) \cdot \left(\frac{|v| - \text{deadzone}}{1.0 - \text{deadzone}}\right)^{1.4}$$
-- **12% Center Deadzone**: Prevents phantom motor hum caused by mechanical stick drift.
-- **Low Stick Displacements ($<30\%$)**: Delivers ultra-fine micro-positioning for docking and tight doorways.
-- **Full Stick Deflection ($100\%$)**: Unlocks 100% full motor RPM and maximum torque.
 
 ---
 
@@ -508,7 +460,6 @@ Use this symptom-cause-action table to diagnose and resolve any field issues:
 | **Camera stream displays static test card HUD** | USB webcam unplugged or unmounted by kernel. | 1. Unplug and replug the USB webcam into a blue USB 3.0 port.<br>2. Run `ls -l /dev/video*` to verify detection.<br>3. Restart service: `sudo systemctl restart sam`. |
 | **Latency indicator turns RED ($>50\text{ ms}$)** | Wireless interference or weak Wi-Fi signal. | Move rover closer to Wi-Fi access point or switch to 5.0 GHz band. In outdoor settings, activate Autonomous Hotspot mode. |
 | **"LOW VOLT" banner appears in navbar** | Raspberry Pi USB-C power supply dropping below 4.63V under CPU/motor load. | Replace thin USB-C cable with a high-current 18 AWG cable or use a dedicated 5V 3A DC-DC buck converter. |
-| **Gamepad controller not detected** | Browser Gamepad API requires user interaction to wake up. | Plug in USB cable or pair Bluetooth, open dashboard, and **press any button (`A`, `X`, or stick)** to wake the browser interface. |
 
 ---
 
