@@ -19,7 +19,7 @@ An educational, modular robotics software platform and teleoperation dashboard f
    * **Live Video Streaming**: Realtime low-latency MJPEG stream over `/api/video/feed` with animated synthetic HUD fallback if no USB camera is plugged in.
    * **Virtual Analog Joystick**: HTML5 canvas touch joystick with smooth spring return, differential steering, and **protection against mobile scrolling & long-press right-clicks**.
    * **D-Pad & Keyboard**: Directional buttons with hold-to-drive and full WASD / Arrow keys.
-   * **Speed Gears**: 30% (Crawl), 60% (Cruising), 90% (Turbo), and variable slider.
+   * **Speed Gears**: LOW (30%), MED (60%), HIGH (90%), and variable slider.
    * **Gamepad API**: Native support for Xbox / PlayStation / USB controllers.
    * **Failsafe Watchdog**: Automatic motor cutoff within 500ms if the browser disconnects.
 
@@ -29,7 +29,7 @@ An educational, modular robotics software platform and teleoperation dashboard f
    * **Sensor Toggle**: Disables ultrasonic polling on demand.
 
 5. **Networking Autonomy (AP Hotspot ⟷ Wi-Fi STA Fallback)**:
-   * Automatic AP Hotspot creation (`SAM-Rover-Setup`, `192.168.4.1`) on first boot or when saved Wi-Fi is out of range.
+   * Automatic AP Hotspot creation (`SAM-Rover-Setup`, `192.168.4.1`) on first boot or when saved Wi-Fi is out of range, accessible directly at `http://sam.local`.
    * External USB Wi-Fi adapter auto-detection (`wlan1` / External Dongle).
    * Web UI Wi-Fi scanner and network connection manager.
 

@@ -88,7 +88,7 @@ On first boot, your rover creates its own personal Wi-Fi network so you can conn
 |                                                                         |
 | 1. Open Wi-Fi on Phone/Laptop ---> Select "SAM_ROVER_WIFI"              |
 | 2. Enter Password: "raspberry"                                          |
-| 3. Open Web Browser           ---> Go to: http://sam.local:8000        |
+| 3. Open Web Browser           ---> Go to: http://sam.local (or :8000)        |
 +-------------------------------------------------------------------------+
 ```
 
@@ -151,7 +151,7 @@ The dashboard is designed to be intuitive, responsive, and fun. Here is how to t
 |                                                      |                               |
 | [MOTORS: L:0% R:0%]                     [HUD: READY] | [ Joystick Tab ] [ D-Pad Tab] |
 +------------------------------------------------------+-------------------------------+
-| SPEED GEARS:  [ 25% Crawl ]   [ 50% Normal ]   [ 75% Fast ]   [ 100% Max ]           |
+| SPEED GEARS:  [ LOW (30%) ]   [ MED (60%) ]   [ HIGH (90%) ]                          |
 | LIGHTS:       [ FRONT ] [ REAR ] [ LEFT ] [ RIGHT ] [ ALL ON ]                       |
 | AUDIO:        [ HORN BEEP ]                     CONTROLLER:   [ Gamepad Connected ]  |
 +--------------------------------------------------------------------------------------+
