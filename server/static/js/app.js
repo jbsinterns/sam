@@ -1198,6 +1198,111 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+
+  // --- System Power & Lifecycle Modal ---
+  const powerModal = document.getElementById('power-modal');
+  const btnOpenPower = document.getElementById('btn-open-power');
+  const btnClosePower = document.getElementById('btn-close-power');
+  const powerModalBackdrop = document.getElementById('power-modal-backdrop');
+  const btnPowerShutdown = document.getElementById('btn-power-shutdown');
+  const btnPowerReboot = document.getElementById('btn-power-reboot');
+  const btnPowerRestartService = document.getElementById('btn-power-restart-service');
+  const powerStatusBanner = document.getElementById('power-status-banner');
+  const powerStatusText = document.getElementById('power-status-text');
+  const powerStatusSubtext = document.getElementById('power-status-subtext');
+
+  if (btnOpenPower && powerModal) {
+    btnOpenPower.addEventListener('click', () => {
+      powerModal.classList.add('open');
+      if (powerStatusBanner) powerStatusBanner.style.display = 'none';
+      if (btnPowerShutdown) btnPowerShutdown.disabled = false;
+      if (btnPowerReboot) btnPowerReboot.disabled = false;
+      if (btnPowerRestartService) btnPowerRestartService.disabled = false;
+    });
+  }
+
+  if (btnClosePower && powerModal) {
+    btnClosePower.addEventListener('click', () => {
+      powerModal.classList.remove('open');
+    });
+  }
+
+  if (powerModalBackdrop && powerModal) {
+    powerModalBackdrop.addEventListener('click', () => {
+      powerModal.classList.remove('open');
+    });
+  }
+
+  function startPowerCountdown(title, seconds, subtextTemplate) {
+    if (btnPowerShutdown) btnPowerShutdown.disabled = true;
+    if (btnPowerReboot) btnPowerReboot.disabled = true;
+    if (btnPowerRestartService) btnPowerRestartService.disabled = true;
+    if (powerStatusBanner) {
+      powerStatusBanner.style.display = 'block';
+      let remaining = seconds;
+      powerStatusText.textContent = `${title} (${remaining}s)`;
+      powerStatusSubtext.textContent = subtextTemplate.replace('{sec}', remaining);
+
+      const interval = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          clearInterval(interval);
+          powerStatusText.textContent = `${title} - Complete`;
+          powerStatusSubtext.textContent = 'Safe to switch off hardware or page will reconnect.';
+        } else {
+          powerStatusText.textContent = `${title} (${remaining}s)`;
+          powerStatusSubtext.textContent = subtextTemplate.replace('{sec}', remaining);
+        }
+      }, 1000);
+    }
+  }
+
+  if (btnPowerShutdown) {
+    btnPowerShutdown.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to shut down SAM Rover?\n\nAll motors will stop and the Raspberry Pi will safely halt before power can be turned off.')) {
+        return;
+      }
+      try {
+        startPowerCountdown('Shutting Down SAM', 15, 'Do NOT unplug battery yet. Safe in {sec}s...');
+        const res = await fetch('/api/system/shutdown', { method: 'POST' });
+        const data = await res.json();
+        console.log('[System Power] Shutdown initiated:', data);
+      } catch (e) {
+        console.error('[System Power] Shutdown request error:', e);
+      }
+    });
+  }
+
+  if (btnPowerReboot) {
+    btnPowerReboot.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to reboot SAM Rover?\n\nServices will restart and the connection will be interrupted.')) {
+        return;
+      }
+      try {
+        startPowerCountdown('Rebooting SAM', 45, 'Reboot in progress. Reconnecting in {sec}s...');
+        const res = await fetch('/api/system/reboot', { method: 'POST' });
+        const data = await res.json();
+        console.log('[System Power] Reboot initiated:', data);
+      } catch (e) {
+        console.error('[System Power] Reboot request error:', e);
+      }
+    });
+  }
+
+  if (btnPowerRestartService) {
+    btnPowerRestartService.addEventListener('click', async () => {
+      try {
+        startPowerCountdown('Restarting Daemon', 5, 'Reloading sam.service in {sec}s...');
+        const res = await fetch('/api/system/restart-service', { method: 'POST' });
+        const data = await res.json();
+        console.log('[System Power] Service restart initiated:', data);
+        setTimeout(() => { window.location.reload(); }, 5500);
+      } catch (e) {
+        console.error('[System Power] Service restart error:', e);
+      }
+    });
+  }
+
   // --- Initial Telemetry Hydration from Embedded Server State ---
   const initDataEl = document.getElementById('initial-telemetry-data');
   if (initDataEl && initDataEl.textContent.trim()) {

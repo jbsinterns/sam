@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import config_manager
 from core.hardware_manager import hw_manager
-from server.routes import video, teleop, hardware, network, health, metrics
+from server.routes import video, teleop, hardware, network, health, metrics, system
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -56,6 +56,7 @@ app.include_router(hardware.router)
 app.include_router(network.router)
 app.include_router(health.router)
 app.include_router(metrics.router)
+app.include_router(system.router)
 
 
 import json
