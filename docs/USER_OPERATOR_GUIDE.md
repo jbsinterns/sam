@@ -3,7 +3,7 @@
 **Document Version:** 4.2 (Production Stable)  
 **Target Audience:** Field Operators, Robotics Students, Lab Technicians, Competition Drivers  
 **System Architecture:** Ubuntu/Debian Linux on Raspberry Pi • Hardware-Accurate `lgpio` HAL • FastAPI Teleoperation Server  
-**Web Dashboard URL:** `http://<rover-ip>:8000` (or `http://10.42.0.1:8000` in Hotspot Mode)  
+**Web Dashboard URL:** `http://<rover-ip>:8000` (or `http://192.168.4.1:8000` in Hotspot Mode)  
 
 ---
 
@@ -83,12 +83,12 @@ Follow this step-by-step checklist to deploy and operate the rover immediately:
 2. **System Boot**: Allow **25–30 seconds** for Ubuntu Linux and the `sam.service` systemd daemon to initialize. The directional LEDs will flash once upon successful hardware claim initialization.
 3. **Connect Your Device**:
    - If on lab/office Wi-Fi: Ensure your laptop, tablet, or phone is connected to the same local wireless router.
-   - If in the field: Connect to the rover's standalone Wi-Fi hotspot: `SAM_ROVER_WIFI` (Password: `raspberry`).
+   - If in the field: Connect to the rover's standalone Wi-Fi hotspot: `SAM-Rover-Setup` (Password: `raspberry`).
 4. **Launch Dashboard**: Open Google Chrome, Mozilla Firefox, Apple Safari, or Microsoft Edge, and enter:
    ```
    http://<rover-ip>:8000
    ```
-   *(e.g., `http://192.168.0.144:8000` or `http://10.42.0.1:8000`)*
+   *(e.g., `http://192.168.0.144:8000` or `http://192.168.4.1:8000`)*
 5. **Acquire Hardware Lease**: In the top navigation bar, locate the amber button labeled **`Claim`** (showing an unlocked padlock). Click it once. The button transforms to a glowing green badge: **`Release (DRIVER)`**.
 6. **Take Control**: Press the **`W`** key or push the on-screen virtual joystick forward. The motors will smoothly spin and drive the rover forward!
 
@@ -104,8 +104,8 @@ TOPOLOGY A: Infrastructure Station Mode             TOPOLOGY B: Autonomous Field
 
    +-------------------+                               +-------------------------------------+
    | Local WiFi Router |                               | SAM ROVER (Acts as Access Point)   |
-   | (e.g. 192.168.0.1)|                               | SSID: SAM_ROVER_WIFI               |
-   +---------+---------+                               | IP:   10.42.0.1                     |
+   | (e.g. 192.168.0.1)|                               | SSID: SAM-Rover-Setup               |
+   +---------+---------+                               | IP:   192.168.4.1                     |
              |                                         +------------------+------------------+
      +-------+-------+                                                    |
      |               |                                                    | Direct 2.4GHz
@@ -149,19 +149,19 @@ When operating outdoors, in industrial facilities, or in robot combat arenas whe
 
 ```bash
 # 1. Start the standalone rover access point
-sudo nmcli device wifi hotspot ifname wlan0 ssid "SAM_ROVER_WIFI" password "raspberry"
+sudo nmcli device wifi hotspot ifname wlan0 ssid "SAM-Rover-Setup" password "raspberry"
 
-# 2. Confirm the hotspot interface is active (IP is 10.42.0.1 by default)
+# 2. Confirm the hotspot interface is active (IP is 192.168.4.1 by default)
 ip -br a show wlan0
 ```
 
 #### How to Operate in Hotspot Mode:
 1. On your operator laptop, iPad, or smartphone, open **Wi-Fi Settings**.
-2. Connect to network: **`SAM_ROVER_WIFI`**
+2. Connect to network: **`SAM-Rover-Setup`**
 3. Enter Password: **`raspberry`**
 4. Open your web browser and navigate directly to:
    ```
-   http://10.42.0.1:8000
+   http://192.168.4.1:8000
    ```
 5. Full teleoperation, HD video streaming, and sensor telemetry will function with zero external internet dependencies!
 
@@ -499,7 +499,7 @@ Adhering to these preventive care guidelines ensures hardware longevity and oper
 | **Find Rover IP Addresses** | `hostname -I` or `ip -br a` |
 | **Scan Nearby Wi-Fi** | `sudo nmcli device wifi list` |
 | **Connect to Wi-Fi** | `sudo nmcli device wifi connect "SSID" password "PASS"` |
-| **Start Field Hotspot** | `sudo nmcli device wifi hotspot ifname wlan0 ssid "SAM_ROVER_WIFI" password "raspberry"` |
+| **Start Field Hotspot** | `sudo nmcli device wifi hotspot ifname wlan0 ssid "SAM-Rover-Setup" password "raspberry"` |
 | **Check Pi Core Temperature** | `vcgencmd measure_temp` |
 | **Check Pi Power Throttling** | `vcgencmd get_throttled` *(0x0 = healthy power)* |
 | **Verify I2C IMU Detection** | `i2cdetect -y 1` *(Address 0x68 should appear)* |

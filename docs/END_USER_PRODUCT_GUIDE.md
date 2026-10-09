@@ -86,7 +86,7 @@ On first boot, your rover creates its own personal Wi-Fi network so you can conn
 +-------------------------------------------------------------------------+
 | FIRST-TIME WI-FI CONNECTION                                             |
 |                                                                         |
-| 1. Open Wi-Fi on Phone/Laptop ---> Select "SAM_ROVER_WIFI"              |
+| 1. Open Wi-Fi on Phone/Laptop ---> Select "SAM-Rover-Setup"              |
 | 2. Enter Password: "raspberry"                                          |
 | 3. Open Web Browser           ---> Go to: http://sam.local (or :8000)        |
 +-------------------------------------------------------------------------+
@@ -96,7 +96,7 @@ On first boot, your rover creates its own personal Wi-Fi network so you can conn
 1. On your smartphone, iPad, tablet, or laptop, open your **Wi-Fi Settings**.
 2. Look for the network named:
    ```
-   SAM_ROVER_WIFI
+   SAM-Rover-Setup
    ```
 3. Tap it and enter the default password:
    ```
@@ -112,7 +112,7 @@ On first boot, your rover creates its own personal Wi-Fi network so you can conn
    ```
    http://sam.local:8000
    ```
-   *(If `sam.local` doesn't load on your device, type: `http://10.42.0.1:8000`)*
+   *(If `sam.local` doesn't load on your device, type: `http://192.168.4.1:8000`)*
 3. The **SAM Rover Live Dashboard** will immediately open on your screen showing your live HD camera feed!
 
 ---
@@ -255,8 +255,8 @@ To keep your rover performing at its best, follow these battery care tips:
 
 | What you see | Why it happens | Easy Fix |
 | :--- | :--- | :--- |
-| **Cannot find `SAM_ROVER_WIFI` in Wi-Fi list** | Rover is still booting up or battery is disconnected. | Check that the 12V battery is plugged in and **Switch 1** is turned ON. Wait a full 30 seconds for the Wi-Fi to appear. |
-| **Page says "Cannot open website" or times out** | Device is not connected to the rover's Wi-Fi. | Open your phone's Wi-Fi settings. Confirm you are connected to `SAM_ROVER_WIFI`. Then go to `http://sam.local:8000` (or `http://10.42.0.1:8000`). |
+| **Cannot find `SAM-Rover-Setup` in Wi-Fi list** | Rover is still booting up or battery is disconnected. | Check that the 12V battery is plugged in and **Switch 1** is turned ON. Wait a full 30 seconds for the Wi-Fi to appear. |
+| **Page says "Cannot open website" or times out** | Device is not connected to the rover's Wi-Fi. | Open your phone's Wi-Fi settings. Confirm you are connected to `SAM-Rover-Setup`. Then go to `http://sam.local:8000` (or `http://192.168.4.1:8000`). |
 | **Camera shows video, but wheels don't turn when I press buttons** | 1. Control lease is not claimed.<br>2. Switch 2 is turned OFF. | 1. Tap the amber **`Claim`** button in the top bar so it turns green.<br>2. Check that **Switch 2** (Motors & Lights) is flipped **ON**. |
 | **Rover moves very slowly or stops on carpet** | Speed gear is set to 25% or battery is getting low. | Tap the **`50%`** or **`100%`** speed button. If still sluggish, plug the battery in to recharge. |
 | **"Observer Mode" message appears on screen** | Another device is currently controlling the rover. | Have the other person tap **`Release`**, or tap **`Take Control`** to switch the driver to your device. |
@@ -271,8 +271,8 @@ Keep this summary handy for quick driving sessions:
 
 ```
 1. Turn ON Switch 1 (Brain) & Switch 2 (Drive)
-2. Connect phone/laptop Wi-Fi to: SAM_ROVER_WIFI (Password: raspberry)
-3. Open browser and visit: http://sam.local:8000  (or 10.42.0.1:8000)
+2. Connect phone/laptop Wi-Fi to: SAM-Rover-Setup (Password: raspberry)
+3. Open browser and visit: http://sam.local:8000  (or 192.168.4.1:8000)
 4. Tap the amber "Claim" button -> Start driving!
 ```
 
