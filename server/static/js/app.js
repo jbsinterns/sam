@@ -1211,9 +1211,58 @@ document.addEventListener('DOMContentLoaded', () => {
   const powerStatusText = document.getElementById('power-status-text');
   const powerStatusSubtext = document.getElementById('power-status-subtext');
 
+  // In-modal confirmation box elements
+  const powerConfirmBox = document.getElementById('power-confirm-box');
+  const powerConfirmIcon = document.getElementById('power-confirm-icon');
+  const powerConfirmTitle = document.getElementById('power-confirm-title');
+  const powerConfirmMsg = document.getElementById('power-confirm-msg');
+  const btnPowerConfirmCancel = document.getElementById('btn-power-confirm-cancel');
+  const btnPowerConfirmOk = document.getElementById('btn-power-confirm-ok');
+
+  let pendingPowerAction = null;
+
+  function hidePowerConfirm() {
+    if (powerConfirmBox) powerConfirmBox.style.display = 'none';
+    pendingPowerAction = null;
+  }
+
+  function showPowerConfirm({ icon, title, message, okText, okColor, okBg, action }) {
+    if (!powerConfirmBox) {
+      if (action) action();
+      return;
+    }
+    if (powerConfirmIcon) powerConfirmIcon.textContent = icon || '⚠️';
+    if (powerConfirmTitle) powerConfirmTitle.textContent = title || 'Confirm Action';
+    if (powerConfirmMsg) powerConfirmMsg.textContent = message || '';
+    if (btnPowerConfirmOk) {
+      btnPowerConfirmOk.textContent = okText || 'Confirm';
+      if (okBg) btnPowerConfirmOk.style.background = okBg;
+      if (okColor) btnPowerConfirmOk.style.color = okColor;
+    }
+    pendingPowerAction = action;
+    powerConfirmBox.style.display = 'block';
+  }
+
+  if (btnPowerConfirmCancel) {
+    btnPowerConfirmCancel.addEventListener('click', () => {
+      hidePowerConfirm();
+    });
+  }
+
+  if (btnPowerConfirmOk) {
+    btnPowerConfirmOk.addEventListener('click', () => {
+      const act = pendingPowerAction;
+      hidePowerConfirm();
+      if (act && typeof act === 'function') {
+        act();
+      }
+    });
+  }
+
   if (btnOpenPower && powerModal) {
     btnOpenPower.addEventListener('click', () => {
       powerModal.classList.add('open');
+      hidePowerConfirm();
       if (powerStatusBanner) powerStatusBanner.style.display = 'none';
       if (btnPowerShutdown) btnPowerShutdown.disabled = false;
       if (btnPowerReboot) btnPowerReboot.disabled = false;
@@ -1224,12 +1273,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnClosePower && powerModal) {
     btnClosePower.addEventListener('click', () => {
       powerModal.classList.remove('open');
+      hidePowerConfirm();
     });
   }
 
   if (powerModalBackdrop && powerModal) {
     powerModalBackdrop.addEventListener('click', () => {
       powerModal.classList.remove('open');
+      hidePowerConfirm();
     });
   }
 
@@ -1258,48 +1309,72 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (btnPowerShutdown) {
-    btnPowerShutdown.addEventListener('click', async () => {
-      if (!confirm('Are you sure you want to shut down SAM Rover?\n\nAll motors will stop and the Raspberry Pi will safely halt before power can be turned off.')) {
-        return;
-      }
-      try {
-        startPowerCountdown('Shutting Down SAM', 15, 'Do NOT unplug battery yet. Safe in {sec}s...');
-        const res = await fetch('/api/system/shutdown', { method: 'POST' });
-        const data = await res.json();
-        console.log('[System Power] Shutdown initiated:', data);
-      } catch (e) {
-        console.error('[System Power] Shutdown request error:', e);
-      }
+    btnPowerShutdown.addEventListener('click', () => {
+      showPowerConfirm({
+        icon: '🛑',
+        title: 'Shut Down SAM Rover?',
+        message: 'All motors will stop immediately and the Raspberry Pi will safely halt before DC power can be disconnected.',
+        okText: 'Initiate Shutdown',
+        okBg: 'var(--accent-red)',
+        okColor: '#ffffff',
+        action: async () => {
+          try {
+            startPowerCountdown('Shutting Down SAM', 15, 'Do NOT unplug battery yet. Safe in {sec}s...');
+            const res = await fetch('/api/system/shutdown', { method: 'POST' });
+            const data = await res.json();
+            console.log('[System Power] Shutdown initiated:', data);
+          } catch (e) {
+            console.error('[System Power] Shutdown request error:', e);
+          }
+        }
+      });
     });
   }
 
   if (btnPowerReboot) {
-    btnPowerReboot.addEventListener('click', async () => {
-      if (!confirm('Are you sure you want to reboot SAM Rover?\n\nServices will restart and the connection will be interrupted.')) {
-        return;
-      }
-      try {
-        startPowerCountdown('Rebooting SAM', 45, 'Reboot in progress. Reconnecting in {sec}s...');
-        const res = await fetch('/api/system/reboot', { method: 'POST' });
-        const data = await res.json();
-        console.log('[System Power] Reboot initiated:', data);
-      } catch (e) {
-        console.error('[System Power] Reboot request error:', e);
-      }
+    btnPowerReboot.addEventListener('click', () => {
+      showPowerConfirm({
+        icon: '🔄',
+        title: 'Reboot SAM Rover?',
+        message: 'Operating system and services will reboot. Web connection will temporarily drop while the Pi restarts.',
+        okText: 'Initiate Reboot',
+        okBg: '#f59e0b',
+        okColor: '#0f172a',
+        action: async () => {
+          try {
+            startPowerCountdown('Rebooting SAM', 45, 'Reboot in progress. Reconnecting in {sec}s...');
+            const res = await fetch('/api/system/reboot', { method: 'POST' });
+            const data = await res.json();
+            console.log('[System Power] Reboot initiated:', data);
+          } catch (e) {
+            console.error('[System Power] Reboot request error:', e);
+          }
+        }
+      });
     });
   }
 
   if (btnPowerRestartService) {
-    btnPowerRestartService.addEventListener('click', async () => {
-      try {
-        startPowerCountdown('Restarting Daemon', 5, 'Reloading sam.service in {sec}s...');
-        const res = await fetch('/api/system/restart-service', { method: 'POST' });
-        const data = await res.json();
-        console.log('[System Power] Service restart initiated:', data);
-        setTimeout(() => { window.location.reload(); }, 5500);
-      } catch (e) {
-        console.error('[System Power] Service restart error:', e);
-      }
+    btnPowerRestartService.addEventListener('click', () => {
+      showPowerConfirm({
+        icon: '⚡',
+        title: 'Restart SAM Daemon?',
+        message: 'Soft restart of SAM teleop daemon. The page will reload once the daemon is up.',
+        okText: 'Restart Service',
+        okBg: 'rgba(6,182,212,0.2)',
+        okColor: '#06b6d4',
+        action: async () => {
+          try {
+            startPowerCountdown('Restarting Daemon', 5, 'Reloading sam.service in {sec}s...');
+            const res = await fetch('/api/system/restart-service', { method: 'POST' });
+            const data = await res.json();
+            console.log('[System Power] Service restart initiated:', data);
+            setTimeout(() => { window.location.reload(); }, 5500);
+          } catch (e) {
+            console.error('[System Power] Service restart error:', e);
+          }
+        }
+      });
     });
   }
 

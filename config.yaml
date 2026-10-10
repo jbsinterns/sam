@@ -75,10 +75,10 @@ safety:
 camera:
   # Port auto-scan will check indices 0 through 4
   preferred_index: 0
-  width: 1280
-  height: 720
-  fps: 25
-  jpeg_quality: 80
+  width: 640
+  height: 480
+  fps: 30
+  jpeg_quality: 85
 
 # --- Networking Configuration ---
 network:

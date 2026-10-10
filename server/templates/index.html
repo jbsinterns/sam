@@ -647,6 +647,15 @@
             </div>
             <button class="btn btn-outline btn-sm" id="btn-power-restart-service" style="padding:6px 14px; font-weight:700; font-size:0.75rem; border-color:#06b6d4; color:#06b6d4;">Restart</button>
           </div>
+        <!-- Power In-Modal Confirmation Box -->
+        <div id="power-confirm-box" style="display:none; margin-top:14px; padding:14px; border-radius:8px; text-align:center; background:rgba(0,0,0,0.5); border:1px solid var(--border-subtle); backdrop-filter:blur(6px); transition:all 0.2s ease;">
+          <div id="power-confirm-icon" style="font-size:1.6rem; margin-bottom:4px;">⚠️</div>
+          <div id="power-confirm-title" style="font-weight:700; font-size:0.92rem; color:#fff; margin-bottom:4px;">Confirm System Action</div>
+          <div id="power-confirm-msg" style="font-size:0.75rem; color:var(--text-muted); margin-bottom:12px; line-height:1.4;"></div>
+          <div style="display:flex; justify-content:center; gap:10px;">
+            <button class="btn btn-outline btn-sm" id="btn-power-confirm-cancel" style="padding:6px 14px; font-size:0.75rem;">Cancel</button>
+            <button class="btn btn-danger btn-sm" id="btn-power-confirm-ok" style="padding:6px 16px; font-weight:700; font-size:0.75rem;">Confirm</button>
+          </div>
         </div>
 
         <!-- Power Status Banner / Countdown -->
