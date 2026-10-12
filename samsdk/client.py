@@ -1,4 +1,4 @@
-﻿"""
+"""
 SAM Rover SDK - Client Library
 Provides intuitive APIs for moving the rover, reading ultrasonic distances,
 controlling LEDs, buzzer, IMU, camera, and ArUco computer vision tracking.
@@ -100,13 +100,18 @@ class BuzzerDevice:
         if self.rover._local_hw:
             self.rover._local_hw.buzzer.toggle()
 
-    def beep(self, duration: float = 0.15, count: int = 1, delay: float = 0.1, blocking: bool = False) -> None:
+    def beep(self, duration: float = 0.2, count: int = 1, delay: float = 0.1, blocking: bool = True) -> None:
         """Plays one or more audible chirps blockingly or in a background thread."""
+        # Handle Arduino/tone(freq, duration) style calls, e.g. beep(1000, 0.2)
+        if duration > 10.0 and isinstance(count, (int, float)) and count < 10.0:
+            duration = float(count)
+            count = 1
+
         self.stop_beep()
         self._stop_event.clear()
 
         def _worker():
-            for i in range(count):
+            for i in range(int(count)):
                 if self._stop_event.is_set():
                     break
                 if self.rover._local_hw:

@@ -13,6 +13,9 @@ if _repo_root not in sys.path:
 
 from samsdk.client import SamRover, ArUcoTracker, IMUTracker
 
-__all__ = ["SamRover", "ArUcoTracker", "IMUTracker"]
+# Backward compatibility alias
+SAMRover = SamRover
+
+__all__ = ["SamRover", "SAMRover", "ArUcoTracker", "IMUTracker"]
 __version__ = "2.4.0"
 
