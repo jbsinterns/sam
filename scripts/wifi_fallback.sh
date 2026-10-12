@@ -17,9 +17,10 @@ HOTSPOT_SSID="SAM-Rover-Setup"
 HOTSPOT_IP="192.168.4.1/24"
 FAIL_COUNTER_FILE="/tmp/sam_wifi_fail_count"
 
-# Check if an external Wi-Fi dongle (wlan1) is present
-if nmcli dev 2>/dev/null | grep -q "wlan1"; then
-    AP_INTERFACE="wlan1"
+# Check if an external Wi-Fi dongle (wlan1 or wlx*) is present
+EXT_IFACE=$(nmcli -t -f DEVICE,TYPE dev 2>/dev/null | grep ':wifi$' | cut -d: -f1 | grep -v '^wlan0$' | head -n1)
+if [ -n "$EXT_IFACE" ]; then
+    AP_INTERFACE="$EXT_IFACE"
     STA_INTERFACE="wlan0"
 else
     AP_INTERFACE="wlan0"
@@ -37,6 +38,13 @@ is_premise_wifi_connected() {
     conn=$(nmcli -t -f NAME,DEVICE,TYPE con show --active 2>/dev/null | grep ":${STA_INTERFACE}:" | cut -d: -f1)
     if [ -n "$conn" ] && [ "$conn" != "${HOTSPOT_NAME}" ]; then
         return 0
+    fi
+    if [ -n "$EXT_IFACE" ]; then
+        local ext_conn
+        ext_conn=$(nmcli -t -f NAME,DEVICE,TYPE con show --active 2>/dev/null | grep ":${EXT_IFACE}:" | cut -d: -f1)
+        if [ -n "$ext_conn" ] && [ "$ext_conn" != "${HOTSPOT_NAME}" ]; then
+            return 0
+        fi
     fi
     return 1
 }
