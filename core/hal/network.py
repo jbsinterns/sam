@@ -341,7 +341,7 @@ class NetworkManager:
                 ["nmcli", "con", "up", previous_conn, "ifname", target_iface],
                 capture_output=True,
                 text=True,
-                timeout=12,
+                timeout=20,
             )
             if rollback.returncode == 0:
                 return {
@@ -405,8 +405,12 @@ class NetworkManager:
                     self._cleanup_duplicate_connections(ssid, keep_uuid=primary_uuid, ifname=target_iface)
                 if password:
                     subprocess.run(["nmcli", "con", "modify", primary_uuid, "802-11-wireless-security.key-mgmt", "wpa-psk", "802-11-wireless-security.psk", password], capture_output=True)
-                res = subprocess.run(["nmcli", "con", "up", primary_uuid, "ifname", target_iface], capture_output=True, text=True, timeout=12)
+                res = subprocess.run(["nmcli", "con", "up", primary_uuid, "ifname", target_iface], capture_output=True, text=True, timeout=30)
                 if res.returncode == 0:
+                    try:
+                        subprocess.run(["nmcli", "con", "modify", primary_uuid, "connection.autoconnect-priority", "10"], capture_output=True)
+                    except Exception:
+                        pass
                     return {
                         "success": True,
                         "interface": target_iface,
@@ -427,7 +431,7 @@ class NetworkManager:
                 cmd.extend(["password", password])
 
             print(f"[Network] Connecting to Wi-Fi '{ssid}' on interface '{target_iface}'...")
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=14)
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
             # 5. Fallback for WPA2/WPA3 key-mgmt missing bug on modern NetworkManager (Ubuntu 24.04/26.04)
             if res.returncode != 0 and ("key-mgmt" in res.stderr or "key-mgmt" in res.stdout):
@@ -437,13 +441,13 @@ class NetworkManager:
                     subprocess.run(["nmcli", "con", "modify", uuid, "802-11-wireless-security.key-mgmt", "wpa-psk"], capture_output=True)
                     if password:
                         subprocess.run(["nmcli", "con", "modify", uuid, "802-11-wireless-security.psk", password], capture_output=True)
-                    res = subprocess.run(["nmcli", "con", "up", uuid, "ifname", target_iface], capture_output=True, text=True, timeout=15)
+                    res = subprocess.run(["nmcli", "con", "up", uuid, "ifname", target_iface], capture_output=True, text=True, timeout=30)
                 else:
                     subprocess.run(["nmcli", "con", "add", "type", "wifi", "ifname", target_iface, "con-name", ssid, "ssid", ssid], capture_output=True)
                     subprocess.run(["nmcli", "con", "modify", ssid, "802-11-wireless-security.key-mgmt", "wpa-psk"], capture_output=True)
                     if password:
                         subprocess.run(["nmcli", "con", "modify", ssid, "802-11-wireless-security.psk", password], capture_output=True)
-                    res = subprocess.run(["nmcli", "con", "up", ssid, "ifname", target_iface], capture_output=True, text=True, timeout=15)
+                    res = subprocess.run(["nmcli", "con", "up", ssid, "ifname", target_iface], capture_output=True, text=True, timeout=30)
 
             if res.returncode == 0:
                 try:
