@@ -18,7 +18,7 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 DEFAULT_CONFIG: Dict[str, Any] = {
     "system": {
         "name": "SAM",
-        "version": "2.0.0",
+        "version": "2.4.0",
         "mock_hardware": "auto",
         "port": 8000,
         "host": "0.0.0.0",

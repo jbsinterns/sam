@@ -23,7 +23,7 @@ def liveness_probe() -> dict:
     return {
         "status": "alive",
         "rover": config_manager.get("system", "name", default="SAM"),
-        "version": config_manager.get("system", "version", default="2.0.0"),
+        "version": config_manager.get("system", "version", default="2.4.0"),
         "uptime_sec": round(time.time() - _start_time, 1),
     }
 

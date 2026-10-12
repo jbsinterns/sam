@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="SAM Rover Teleoperation & Autonomy",
-    version=config_manager.get("system", "version", default="2.0.0"),
+    version=config_manager.get("system", "version", default="2.4.0"),
     lifespan=lifespan,
 )
 
@@ -70,7 +70,7 @@ def index(request: Request):
         name="index.html",
         context={
             "rover_name": config_manager.get("system", "name", default="SAM"),
-            "version": config_manager.get("system", "version", default="2.0.0"),
+            "version": config_manager.get("system", "version", default="2.4.0"),
             "is_mock": config_manager.is_mock,
             "initial_telemetry": telemetry,
             "json_initial_telemetry": json.dumps(telemetry),

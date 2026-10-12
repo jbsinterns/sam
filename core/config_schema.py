@@ -116,7 +116,7 @@ class CameraConfig(BaseModel):
 
 class SystemConfig(BaseModel):
     name: str = Field(default="SAM")
-    version: str = Field(default="2.0.0")
+    version: str = Field(default="2.4.0")
     mock_hardware: Union[bool, str] = Field(default="auto")
     port: int = Field(default=8000, ge=1, le=65535)
     host: str = Field(default="0.0.0.0")

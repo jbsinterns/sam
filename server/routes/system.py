@@ -46,7 +46,7 @@ def get_system_status() -> Dict[str, Any]:
     """Returns system status, uptime, and host details."""
     return {
         "rover": config_manager.get("system", "name", default="SAM"),
-        "version": config_manager.get("system", "version", default="2.0.0"),
+        "version": config_manager.get("system", "version", default="2.4.0"),
         "is_mock": config_manager.is_mock,
         "platform": sys.platform,
     }

@@ -1,5 +1,5 @@
 # SAM Rover Fleet — Technical Deployment & Provisioning SOP
-**Document Version:** 2.0.0 (Alpha Build)  
+**Document Version:** 2.4.0 (Production Stable)  
 **Target Architecture:** Raspberry Pi 4 Model B / Raspberry Pi 5 (ARM64 / aarch64)  
 **Operating Systems:** Ubuntu 24.04 LTS / Ubuntu 26.04 LTS (Resolute Raccoon) / Debian Bookworm 64-bit  
 **Corpus / Repository:** `https://github.com/Abhijeet226/sam.git` (Branch: `alpha`)

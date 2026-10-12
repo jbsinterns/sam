@@ -14,5 +14,5 @@ if _repo_root not in sys.path:
 from samsdk.client import SamRover, ArUcoTracker, IMUTracker
 
 __all__ = ["SamRover", "ArUcoTracker", "IMUTracker"]
-__version__ = "2.0.0"
+__version__ = "2.4.0"
 
